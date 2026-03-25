@@ -1,30 +1,30 @@
-# Tech Stack Requirements Document — Alex: Personal AI Operating System
+# Tech Stack Requirements Document
+## Alex — Personal AI Operating System
 **Version:** v1.0
 **Date:** 24 March 2026
 **Status:** Draft
-**References:** GOAL.md, PRD.md v1.0, SYSTEM_DESIGN.md v1.0, USER_FLOW.md v1.0, FEATURE_LIST.md v1.0
-**Author:** Alex Project Team
+**Author:** Alex Build Team
+**References:** PRD.md v1.0, SYSTEM_DESIGN.md v1.0, GOAL.md
+
+---
+
+## Architecture Reconciliation Note
+
+The System Design Document (v1.0) specified a local-first, single-machine modular monolith using SQLite and ChromaDB for fully offline operation. This Tech Stack Document incorporates confirmed technology decisions from the team — PostgreSQL + pgvector, Supabase, Redis, Railway, and Vercel — which represent a deliberate shift to a cloud-deployed, production-grade architecture.
+
+The hybrid AI principle from the PRD is fully preserved: all core features must function without paid AI API dependency. The infrastructure shift does not violate this constraint, as Supabase, PostgreSQL, and Redis all have free tiers sufficient for v1.0 operation. System Design sections referencing SQLite and ChromaDB are superseded by the decisions recorded here. All other System Design decisions — the AI Model Router, component breakdown, and data flows — remain valid and are carried forward unchanged.
 
 ---
 
 ## Table of Contents
 
-1. [Purpose & Scope](#10-purpose--scope)
-2. [Tech Stack Overview Table](#20-tech-stack-overview-table)
-3. [Detailed Stack Breakdown](#30-detailed-stack-breakdown)
-   - 3.1 [Frontend](#31-frontend)
-   - 3.2 [Backend](#32-backend)
-   - 3.3 [AI & Intelligence](#33-ai--intelligence)
-   - 3.4 [Database & Storage](#34-database--storage)
-   - 3.5 [Communication Layer](#35-communication-layer)
-   - 3.6 [Automation & Integrations](#36-automation--integrations)
-   - 3.7 [Infrastructure & Hosting](#37-infrastructure--hosting)
-   - 3.8 [Monitoring & Debugging](#38-monitoring--debugging)
-   - 3.9 [Development Tools](#39-development-tools)
-4. [Rejected Alternatives](#40-rejected-alternatives)
-5. [Cost Breakdown](#50-cost-breakdown)
-6. [Open Questions](#60-open-questions)
-7. [Next Steps](#70-next-steps)
+1.0 Purpose & Scope
+2.0 Tech Stack Overview Table
+3.0 Detailed Stack Breakdown
+4.0 Rejected Alternatives
+5.0 Cost Breakdown
+6.0 Open Questions
+7.0 Next Steps
 
 ---
 
@@ -32,610 +32,347 @@
 
 ### 1.1 Purpose
 
-This document formalises every technology choice for Alex v1.0. It translates architecture decisions made in SYSTEM_DESIGN.md and feature requirements from FEATURE_LIST.md into specific tools, frameworks, versions, and services — with explicit reasoning for each selection over its alternatives.
+This Tech Stack Requirements Document specifies every tool, framework, library, service, and platform required to build, deploy, monitor, and maintain Alex v1.0. It provides the rationale for each technology selection, documents free-tier limits and paid-tier costs, and identifies residual open questions that must be resolved before development begins.
 
-This document is the reference for engineers setting up the development environment, DevOps configuring infrastructure, and anyone evaluating cost or risk in the stack.
+Every selection in this document has been evaluated against three criteria carried forward from the PRD: it must support full functionality in free mode, it must not create a hard dependency on paid services for core operation, and switching between free and paid tiers must be non-disruptive to the running system.
 
-### 1.2 Decisions Carried Forward
+### 1.2 Scope
 
-The following technology directions were established in earlier documentation and are now formalised here:
+This document covers the complete technology surface of Alex v1.0 across the following layers: frontend, backend, AI and intelligence, database and storage, communication, automation and integrations, infrastructure and hosting, monitoring and debugging, and development tooling. Security-specific configurations are covered in the Security Document; this document records technology selections and rationale only.
 
-| Decision | Established In | Technology |
-|----------|---------------|-----------|
-| Mobile-first, web companion | PRD.md, SYSTEM_DESIGN.md | React Native + Next.js |
-| LLM provider | SYSTEM_DESIGN.md § 4.2 | Anthropic Claude (claude-sonnet-4-20250514) |
-| STT engine | SYSTEM_DESIGN.md § 4.1 | Deepgram Nova-3 (streaming) |
-| TTS engine | SYSTEM_DESIGN.md § 4.1 | ElevenLabs turbo + Google TTS fallback |
-| Wake word | SYSTEM_DESIGN.md § 4.1 | Porcupine by Picovoice |
-| Primary database | SYSTEM_DESIGN.md § 4.3 | Supabase (PostgreSQL + pgvector) |
-| Cache + queue | SYSTEM_DESIGN.md § 4.3 | Upstash Redis + BullMQ |
-| Email | SYSTEM_DESIGN.md § 4.5 | Gmail API (Google OAuth 2.0) |
-| WhatsApp | SYSTEM_DESIGN.md § 4.5 | Meta WhatsApp Business Cloud API |
-| Architecture pattern | SYSTEM_DESIGN.md § 3 | Modular monolith (Node.js) |
-| File embeddings | SYSTEM_DESIGN.md § 4.3 | OpenAI text-embedding-3-small |
+### 1.3 Decisions Carried Forward
 
-### 1.3 Guiding Principles for Technology Selection
-
-Every technology in this stack was evaluated against these criteria, in order of priority:
-
-1. **Latency** — Does it support the ≤ 2 second voice-to-response target?
-2. **Streaming support** — Can it stream responses (critical for voice UX)?
-3. **Integration maturity** — Does it have well-maintained SDKs for Node.js and React Native?
-4. **Cost at single-user scale** — Is it affordable at low volume with a generous free tier?
-5. **Scalability path** — Can it grow to multi-user without a rewrite?
-6. **Developer experience** — Is the documentation, tooling, and community strong enough to move fast?
+| Source Document | Decision |
+|----------------|----------|
+| PRD.md | Free mode must be 100% functional without paid API dependency |
+| PRD.md | Paid APIs are performance boosters, not core dependencies |
+| PRD.md | Single-user system in v1.0; no multi-tenancy required |
+| SYSTEM_DESIGN.md | AI Model Router abstracts all model providers behind a uniform interface |
+| SYSTEM_DESIGN.md | Modular architecture; every layer communicates via the internal REST API |
+| SYSTEM_DESIGN.md | WebSocket / SSE for real-time updates to the frontend |
+| SYSTEM_DESIGN.md | Google Calendar API v3 for calendar integration in v1.0 |
+| SYSTEM_DESIGN.md | Twilio for WhatsApp; SMTP/IMAP for email |
+| SYSTEM_DESIGN.md | faster-whisper (local STT), Coqui TTS (local), Porcupine (wake word) |
 
 ---
 
 ## 2.0 Tech Stack Overview Table
 
-| Layer | Technology | Version | Purpose | Why Chosen |
-|-------|-----------|---------|---------|------------|
-| **Mobile App** | React Native (Expo) | SDK 52 | iOS + Android app | Single codebase, native performance, large ecosystem |
-| **Web Dashboard** | Next.js | 15 (App Router) | Web companion UI | Same React paradigm as mobile; SSR for performance |
-| **UI Components (Mobile)** | NativeWind + Tailwind | 4.x | Styling + components | Utility-first, consistent with web styling |
-| **UI Components (Web)** | shadcn/ui | Latest | Web component library | Headless, fully customisable, no vendor lock-in |
-| **State Management** | Zustand | 5.x | Client state | Minimal boilerplate; simpler than Redux for this scale |
-| **Backend Runtime** | Node.js | 22 LTS | Server runtime | Non-blocking I/O suits streaming + concurrent tool calls |
-| **Backend Framework** | Express.js | 5.x | REST API + SSE | Lightweight, mature, full control over streaming |
-| **Language** | TypeScript | 5.x | Full-stack language | Type safety across frontend + backend; reduces bugs |
-| **LLM** | Anthropic Claude | claude-sonnet-4-20250514 | Intelligence core | Best tool-use + streaming; context window; safety |
-| **Speech-to-Text** | Deepgram Nova-3 | API v1 | Real-time STT | Lowest latency streaming STT available; best accuracy |
-| **Text-to-Speech** | ElevenLabs | eleven_turbo_v2 | Voice response | Natural voice; streaming support; < 400ms first chunk |
-| **TTS Fallback** | Google Cloud TTS | WaveNet en-US | TTS fallback | Reliable, cheap, good quality fallback |
-| **Wake Word** | Porcupine (Picovoice) | v3 | On-device wake word | 100% on-device; low power; cross-platform SDK |
-| **Embeddings** | OpenAI Embeddings | text-embedding-3-small | File + memory vectors | Best price/quality ratio; 1536-dim; widely supported |
-| **Primary DB** | Supabase (PostgreSQL) | Latest | All structured data | Postgres + realtime + auth + storage in one platform |
-| **Vector Search** | pgvector (in Supabase) | 0.7.x | Semantic file + memory search | No extra service; co-located with primary DB |
-| **Cache** | Upstash Redis | Serverless | Session context + rate limiting | Serverless Redis; HTTP API compatible with edge |
-| **Job Queue** | BullMQ | 5.x | Background + scheduled jobs | Mature Redis-backed queue; delayed jobs; retries |
-| **Email** | Gmail API (Google) | v1 | Send + read emails | Direct integration; no relay needed; OAuth secured |
-| **WhatsApp** | Meta Business Cloud API | v21.0 | Send WhatsApp messages | Official API; compliant; supports media + templates |
-| **Push Notifications** | Firebase Cloud Messaging | v1 | iOS + Android push | Industry standard; free; reliable delivery |
-| **File Storage** | Google Drive API | v3 | Source of truth for user files | Already where user files live; no migration needed |
-| **Media Storage** | Supabase Storage | Latest | TTS audio, briefing audio | Co-located; S3-compatible; CDN-backed |
-| **Calendar** | Google Calendar API | v3 | Events, scheduling | Direct integration; OAuth; same credentials as Gmail |
-| **Contacts** | Google People API | v1 | Contact book seeding | Pulls from Gmail contacts; OAuth |
-| **Backend Hosting** | Railway | Latest | Node.js server | Always-on; no cold starts; generous free tier |
-| **Web Hosting** | Vercel | Latest | Next.js web dashboard | Zero-config Next.js deployment; edge CDN |
-| **CI/CD** | GitHub Actions | Latest | Automated test + deploy | Free for public/private repos; tight GitHub integration |
-| **Error Tracking** | Sentry | Latest | Runtime error capture | Best-in-class; React Native + Node.js SDKs |
-| **Product Analytics** | PostHog | Latest | Feature usage tracking | Open-source option; self-hostable; GDPR-friendly |
-| **Log Management** | Axiom | Latest | Structured log aggregation | Generous free tier; excellent DX; fast search |
-| **API Testing** | Postman | Latest | API development + testing | Industry standard; team collaboration; mock servers |
-| **Version Control** | GitHub | Latest | Source control | Industry standard; Actions for CI/CD |
-| **Package Manager** | pnpm | 9.x | Node.js packages | 3× faster than npm; disk-efficient; monorepo support |
-| **Monorepo Tool** | Turborepo | 2.x | Monorepo build system | Fast incremental builds; caching; works with pnpm |
+| Layer | Technology | Version | Purpose | Free / Paid |
+|-------|-----------|---------|---------|-------------|
+| **Frontend Framework** | Next.js | 14.x (App Router) | Dashboard, chat UI, settings, routing | Free |
+| **UI Components** | shadcn/ui | Latest | Accessible, composable component library | Free |
+| **Styling** | Tailwind CSS | 3.x | Utility-first responsive styling | Free |
+| **Client State** | Zustand | 4.x | Lightweight UI state management | Free |
+| **Server State** | TanStack Query | 5.x | API caching, background re-fetching | Free |
+| **Real-time (Frontend)** | Native WebSocket API | — | Streaming responses, live notifications | Free |
+| **Backend Language** | Python | 3.11+ | Primary backend language | Free |
+| **Backend Framework** | FastAPI | 0.111.x | REST API, WebSocket server, OpenAPI docs | Free |
+| **Task Queue** | Celery | 5.x | Async job processing, scheduled tasks | Free |
+| **Message Broker + Cache** | Redis | 7.x | Celery broker, response cache, event bus | Free |
+| **Primary Database** | PostgreSQL | 16.x | All structured relational data | Free tier |
+| **Vector Extension** | pgvector | 0.7.x | Semantic embeddings stored in Postgres | Free |
+| **BaaS Platform** | Supabase | Latest | Managed Postgres, Auth (JWT), File Storage | Free tier |
+| **Local LLM Runtime** | Ollama | 0.3.x | Local model server (free mode) | Free |
+| **Local LLM — Primary** | Mistral 7B Instruct | Q4_K_M | Intent parsing, generation, summarization | Free |
+| **Local LLM — Fallback** | LLaMA 3.1 8B | Q4_K_M | Fallback if Mistral unavailable | Free |
+| **Paid AI — Primary** | Anthropic Claude API | claude-sonnet-4-20250514 | Enhanced reasoning and generation | Paid |
+| **Paid AI — Secondary** | OpenAI API | GPT-4o | Alternative paid model provider | Paid |
+| **Embeddings Model** | all-MiniLM-L6-v2 | 2.x | Text embeddings for semantic search | Free (local) |
+| **NLP Support** | spaCy | 3.x | Entity extraction, tokenization | Free |
+| **STT — Free** | faster-whisper | 1.x | Local audio transcription | Free |
+| **STT — Paid** | OpenAI Whisper API | whisper-1 | Cloud transcription upgrade | Paid |
+| **TTS — Free** | Coqui TTS | 0.22.x | Local voice synthesis | Free |
+| **TTS — Paid** | ElevenLabs API | Latest | High-quality voice upgrade | Paid |
+| **Wake Word** | Porcupine (Picovoice) | 3.x | Offline wake word detection ("Hey Alex") | Free tier |
+| **File Search — Keyword** | Whoosh | 2.7.x | Full-text local file index | Free |
+| **File Watcher** | Watchdog | 4.x | Real-time file system monitoring | Free |
+| **Document Extraction** | Apache Tika (tika-python) | 2.x | Extract text from PDFs, DOCX, XLSX | Free |
+| **Email Outbound** | smtplib (Python stdlib) | — | Send emails via SMTP | Free |
+| **Email Inbound** | imaplib (Python stdlib) | — | Read inbox via IMAP | Free |
+| **WhatsApp — Free** | Twilio WhatsApp Sandbox | — | WhatsApp messaging (dev / personal) | Free tier |
+| **WhatsApp — Paid** | Twilio WhatsApp Business API | — | Production WhatsApp messaging | Paid |
+| **Workflow Automation** | n8n | 1.x (self-hosted) | Visual workflow builder, 400+ integrations | Free (self-hosted) |
+| **Calendar Integration** | Google Calendar API | v3 | Read/write calendar events | Free tier |
+| **Frontend Hosting** | Vercel | — | Next.js deployment, global CDN | Free tier |
+| **Backend Hosting** | Railway | — | FastAPI + Celery + Redis + n8n | Free tier |
+| **Containerization** | Docker + Docker Compose | 26.x | Local dev, production parity | Free |
+| **CI/CD** | GitHub Actions | — | Test, build, deploy pipeline | Free tier |
+| **Error Tracking** | Sentry | Latest | Exception capture, alerting | Free tier |
+| **Metrics** | Prometheus + Grafana | Latest | System metrics and dashboards | Free (self-hosted) |
+| **Structured Logging** | structlog | 24.x | JSON log output, audit trail | Free |
+| **API Testing** | Postman + Newman | Latest | Endpoint testing, smoke tests | Free tier |
+| **API Documentation** | Swagger / OpenAPI | 3.1 | Auto-generated API docs (via FastAPI) | Free |
+| **Version Control** | Git + GitHub | — | Source control, pull requests | Free |
+| **Python Package Manager** | uv | Latest | Fast dependency resolution and locking | Free |
+| **Node Package Manager** | pnpm | Latest | Disk-efficient Node.js package management | Free |
+| **Code Quality** | Ruff + mypy + ESLint | Latest | Linting, formatting, type checking | Free |
+| **Secret Management** | python-dotenv + Supabase Vault | — | Environment variables, encrypted secrets | Free |
 
 ---
 
 ## 3.0 Detailed Stack Breakdown
 
----
-
 ### 3.1 Frontend
 
-#### 3.1.1 Mobile App — React Native (Expo SDK 52)
+**Framework: Next.js 14 (App Router)**
 
-React Native with the Expo managed workflow is the primary client for Alex. It compiles to native iOS and Android from a single TypeScript codebase, which is essential for a small team shipping to both platforms simultaneously.
+Next.js is selected as the frontend framework. The App Router, stabilized in Next.js 14, introduces React Server Components, which reduce the JavaScript bundle delivered to the browser for the initial dashboard load. For Alex's dashboard — a local web application deployed on Vercel — Next.js's static export mode allows the entire frontend to be built as a set of static files, eliminating any server-side compute cost. Vercel's CI/CD pipeline has zero-configuration support for Next.js, making deployment trivial and automatic on every push to `main`.
 
-The Expo managed workflow was chosen over bare React Native for two reasons: it eliminates native build configuration overhead (which is significant on a solo or small team), and Expo's EAS Build service handles App Store and Play Store submission without requiring a Mac for Android builds. The SDK 52 release supports the New Architecture (JSI + Fabric), delivering near-native performance for the real-time voice waveform animation and live transcript rendering that Alex requires.
+The choice of Next.js over a plain Vite + React SPA reflects the need for an integrated routing system, nested layouts (essential for the dashboard's multi-panel structure), and the operational alignment with Vercel as the hosting platform.
 
-The key mobile-specific packages required are:
+**UI Components: shadcn/ui**
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `expo-av` | Latest | Audio recording + playback for voice and TTS |
-| `expo-notifications` | Latest | FCM push notification handling |
-| `expo-background-fetch` | Latest | Background file re-index trigger |
-| `@picovoice/porcupine-react-native` | 3.x | Wake word detection (F001) |
-| `react-native-url-polyfill` | Latest | WebSocket + fetch compatibility |
-| `@supabase/supabase-js` | 2.x | DB queries + Realtime subscriptions |
-| `zustand` | 5.x | Global state management |
-| `react-native-mmkv` | 2.x | Fast local key-value storage (SQLite alternative for preferences) |
+shadcn/ui is a collection of accessible, composable UI components built on Radix UI primitives. Unlike Material UI or Chakra UI, shadcn/ui components are copied directly into the project codebase at generation time — there is no runtime dependency on a third-party component library, and every component can be modified freely. This gives Alex's dashboard full design ownership, which is important for building a product with a distinct personality rather than a generic AI-tool aesthetic. shadcn/ui is Tailwind-native, keeping the styling system consistent across every surface.
 
-**Why not Flutter:** Flutter would require learning Dart and has a weaker ecosystem for the audio-heavy, API-intensive stack Alex uses. React Native's JavaScript runtime means the same TypeScript types and utility libraries can be shared between the mobile app and the Node.js backend via the monorepo.
+**Styling: Tailwind CSS 3.x**
 
-**Why not native iOS/Android:** Two separate codebases would require two engineering tracks — not viable for a lean build.
+Tailwind CSS provides utility-first styling co-located with markup. Its JIT compiler ensures the production CSS bundle contains only the classes actually used, keeping the initial page load lightweight. For a single-developer or small-team project at Alex's stage, Tailwind significantly accelerates UI development compared to writing custom stylesheets.
 
----
+**State Management: Zustand + TanStack Query**
 
-#### 3.1.2 Web Dashboard — Next.js 15 (App Router)
+Client-side UI state — voice input active, modal open, current panel — is managed by Zustand. It is selected over Redux because it requires no boilerplate, has a minimal API surface, and integrates cleanly with React hooks without a provider hierarchy. Server state — task lists, conversation history, calendar events, file search results — is managed by TanStack Query (React Query v5), which provides automatic caching, background re-fetching, stale-while-revalidate semantics, and optimistic updates. Together these two libraries cover every state management scenario in the dashboard without overlap.
 
-The web dashboard uses Next.js 15 with the App Router, deployed on Vercel. It serves as a secondary interface: users who prefer typing over voice, or who want to review tasks, files, and meeting summaries on a larger screen, use the web companion.
+**Real-time: Native WebSocket API**
 
-Next.js was selected because it shares the same React paradigm as the mobile app, meaning component logic and TypeScript types can be reused across both surfaces via the monorepo's shared packages. The App Router's React Server Components reduce JavaScript bundle size for the dashboard views (task list, briefing viewer, settings), while client components handle interactive elements (chat input, voice button, real-time updates via Supabase Realtime).
-
-**Why not a separate SPA (Vite + React):** Next.js handles routing, SSR, API routes, and deployment in one framework, reducing the number of configuration decisions required.
-
----
-
-#### 3.1.3 Styling — NativeWind (Mobile) + Tailwind CSS (Web) + shadcn/ui (Web)
-
-NativeWind 4 brings Tailwind's utility-class system to React Native, enabling a consistent design language across both surfaces. The same spacing, colour, and typography tokens apply whether building the mobile chat UI or the web dashboard.
-
-For the web dashboard, shadcn/ui provides accessible, unstyled components (buttons, cards, dialogs, toasts) that are styled entirely with Tailwind. Unlike component libraries that impose visual opinions (Material UI, Chakra), shadcn/ui is copied directly into the project — there is no external dependency to update, and components can be modified without overriding library styles.
-
----
-
-#### 3.1.4 State Management — Zustand 5
-
-Zustand manages global client state: the current conversation session, voice mode status, active task, and streaming response buffer. It was selected over Redux Toolkit because Alex's state graph is relatively shallow — the core state is a handful of slices (session, voice, tasks, preferences) with straightforward mutations. Zustand's minimal boilerplate and direct integration with React hooks makes it faster to build and easier to debug at this scale. Redux's middleware model would add unnecessary complexity without benefit.
+The frontend maintains a persistent WebSocket connection to the FastAPI backend to receive live updates: assistant response tokens streaming in real time, action completion events, reminder triggers, and morning briefing delivery. The browser's native WebSocket API is used directly, wrapped in a custom React hook with automatic reconnection logic. The upgrade from Server-Sent Events (noted in SYSTEM_DESIGN.md) to WebSockets is made here because WebSockets are bidirectional, which is necessary for voice state management — the frontend must send microphone-active signals to the backend, not only receive events.
 
 ---
 
 ### 3.2 Backend
 
-#### 3.2.1 Runtime — Node.js 22 LTS
+**Language: Python 3.11+**
 
-Node.js 22 LTS is the backend runtime. Its event-driven, non-blocking I/O model is architecturally well-matched to Alex's workload: simultaneously holding open streaming connections to the Claude API, Deepgram WebSocket, and ElevenLabs, while running BullMQ workers for background jobs and serving REST endpoints. A blocking runtime (Python synchronous, PHP) would struggle to maintain the ≤ 2 second voice-to-response latency under concurrent tool execution.
+Python is the natural choice for Alex's backend. The entire AI/ML ecosystem — Hugging Face Transformers, Sentence Transformers, faster-whisper, Coqui TTS, spaCy, and the Porcupine SDK — is Python-native. Using a different backend language would require bridging to Python for all AI operations, splitting the codebase across two languages unnecessarily. Python 3.11 is specified because it introduced significant performance improvements over 3.10 (10–60% faster in CPython benchmarks) and improved exception messages that accelerate debugging.
 
-Node.js 22 specifically is chosen because it is the latest LTS release with built-in support for ES modules, the `fetch` API, WebStreams, and significant V8 performance improvements that benefit the JSON-heavy context assembly work done on every Claude API call.
+**Framework: FastAPI 0.111.x**
 
----
+FastAPI is selected as the backend framework for three primary reasons. First, it is the fastest Python web framework available, built on Starlette and Uvicorn with full async support. Second, it generates OpenAPI 3.1 documentation automatically from type-annotated route definitions and Pydantic models, which means API documentation is always in sync with the actual implementation. Third, its native WebSocket support and async request handling allow Alex to manage multiple concurrent I/O operations — a database query, an AI model call, and a file search — within a single request lifecycle without blocking.
 
-#### 3.2.2 Framework — Express.js 5
+FastAPI's dependency injection system allows the AI Model Router, database session, and user preference context to be injected into any endpoint handler cleanly, keeping components independently testable and consistent with the modular architecture defined in SYSTEM_DESIGN.md.
 
-Express.js 5 is the API framework. Its primary advantage for Alex is explicit, fine-grained control over HTTP response streaming — the Server-Sent Events (SSE) pipeline that powers streaming Claude responses requires setting response headers, writing individual chunks, and managing stream lifecycle in ways that framework abstractions (NestJS, Fastify plugins) often complicate. Express allows the streaming endpoint to be implemented in exactly the pattern the Anthropic SDK expects, without adapter layers.
+**Async Task Queue: Celery 5.x**
 
-Express 5 (currently in release candidate with full v5 expected shortly) adds native async error handling — previously a source of unhandled promise rejection bugs in Express 4 that were particularly problematic in tool execution code paths.
+Long-running operations — sending emails, processing meeting audio, running file indexing jobs, dispatching WhatsApp messages — must not block the API server's response cycle. Celery handles these deferred operations: the API returns a `202 Accepted` immediately, the task is enqueued in Redis, and one or more Celery worker processes execute it asynchronously. When the task completes, the result is published to a Redis Stream and forwarded to the frontend via WebSocket. Celery Beat is used as the task scheduler, handling recurring jobs such as reminder checks (every minute), calendar sync (every 5 minutes), and the morning briefing generation (daily at the user's configured time). This consolidates the APScheduler mentioned in SYSTEM_DESIGN.md under the same Celery infrastructure.
 
-**Why not Fastify:** Fastify's schema-first design and plugin architecture add overhead for a small team that values explicit code over configuration. Express is more widely understood and easier to onboard new engineers.
+**Message Broker and Cache: Redis 7.x**
 
-**Why not NestJS:** NestJS's decorator-heavy, Angular-inspired architecture is better suited to large teams maintaining a complex API. Alex's monolith has clearly bounded modules but does not need NestJS's dependency injection system to achieve that.
+Redis serves two roles simultaneously. As the Celery message broker, it queues tasks from the API server and distributes them to worker processes. As the application cache, it stores frequently accessed data — the user's preference object, recent file search results, and repeated AI model responses — with configurable TTLs to avoid redundant computation. Redis 7.x is specified for its improved multi-threading performance and native Redis Streams support. Redis Streams serve as the internal real-time event bus: action modules publish completion events to a stream, and the WebSocket handler subscribes and forwards those events to the connected frontend client.
 
----
-
-#### 3.2.3 Language — TypeScript 5
-
-TypeScript is used across the entire stack: React Native app, Next.js web dashboard, Express backend, and shared packages. This single-language strategy enables type sharing across layers — the same `Task`, `Contact`, `AutomationPlan`, and `Message` interfaces are defined once in a shared `@alex/types` package and imported by both client and server.
-
-TypeScript 5's `satisfies` operator, const type parameters, and decorator metadata improvements are actively used in the tool definition system (type-safe Claude tool schemas) and Supabase query builder.
+Redis is preferred over RabbitMQ as the Celery broker because it simultaneously handles the caching responsibility, reducing the total number of services in the deployment, and is available on Railway's free tier as a managed service.
 
 ---
 
 ### 3.3 AI & Intelligence
 
-#### 3.3.1 LLM — Anthropic Claude (claude-sonnet-4-20250514)
+**AI Model Router**
 
-Claude `claude-sonnet-4-20250514` is the intelligence core for all of Alex's understanding, planning, drafting, and response generation. It was selected as the primary LLM on the following grounds:
+The AI Model Router is the single component through which all intelligence-requiring operations flow. It presents a uniform `async generate(prompt, system, temperature, max_tokens, response_format)` interface to the rest of the system, regardless of which model is active. The router reads the `ai_mode` configuration from the user's preferences at request time — not at startup — enabling hot-switching between free and paid modes without a process restart. No other component in Alex is aware of which model is currently active.
 
-**Tool use quality.** Alex's architecture depends entirely on Claude's ability to correctly identify which tools to call, in what order, with correctly structured parameters. Claude's tool-use implementation is among the most reliable available, with a low rate of hallucinated tool calls or malformed parameter objects compared to alternatives tested.
+**Free Mode: Ollama + Mistral 7B Instruct (Q4_K_M)**
 
-**Streaming support.** Claude's streaming API delivers tokens via Server-Sent Events with sub-100ms first-token latency from the Anthropic API, which is essential for meeting the ≤ 2 second voice-to-first-audio target.
+In free mode, the AI Model Router calls Ollama's OpenAI-compatible local API at `http://localhost:11434`. The primary model is Mistral 7B Instruct at Q4_K_M quantization, chosen because it achieves the best balance of instruction-following capability and hardware efficiency among 7B-class models. It performs reliably on intent parsing, task planning, and summarization — Alex's three primary AI workloads. The Q4_K_M quantization reduces memory consumption to approximately 4.5 GB, making the model runnable on hardware with 8 GB RAM (minimum) or 16 GB RAM (recommended). LLaMA 3.1 8B is configured as the automatic fallback, activated if Mistral fails to load or if the user explicitly selects it in settings.
 
-**Context window.** The 200,000-token context window means Alex's system prompt (with full user profile, tool definitions, and conversation history) fits comfortably within a single request, even for long sessions or large meeting transcripts sent for summarisation.
+**Paid Mode: Anthropic Claude API (claude-sonnet-4-20250514)**
 
-**Prompt caching.** Anthropic's prompt caching feature allows the static portions of Alex's system prompt (identity, tool definitions, operating rules) to be cached server-side, reducing both latency and token costs on every request by approximately 60–70%.
+In paid mode, the AI Model Router calls the Anthropic Messages API. The `claude-sonnet-4-20250514` model is selected as the primary paid option for its superior instruction-following quality, 200K token context window (critical for meeting transcript summarization), and reliable structured JSON output. The user must provide their own API key, stored encrypted in Supabase Vault. OpenAI GPT-4o is available as a secondary paid option, selectable via the settings panel.
 
-**Safety and reliability.** For a personal assistant that sends emails and WhatsApp messages on the user's behalf, Claude's constitutional AI training reduces the risk of the model producing outputs that embarrass or harm the user through unintended actions.
+**Embeddings: Sentence Transformers (all-MiniLM-L6-v2)**
 
-The specific Claude API configuration for Alex is as follows:
+Semantic search for files and conversation memory requires text embeddings. The `all-MiniLM-L6-v2` model produces 384-dimensional embeddings at approximately 14,000 sentences per second on CPU, with no GPU requirement and no network dependency. It runs locally after a one-time download from Hugging Face. Embeddings are generated at file index time and at conversation store time, then persisted in PostgreSQL via the pgvector extension. This replaces the ChromaDB collections specified in SYSTEM_DESIGN.md; the data model is equivalent, and the elimination of a separate vector database simplifies the deployment significantly.
 
-| Parameter | Value | Rationale |
-|-----------|-------|-----------|
-| Model | `claude-sonnet-4-20250514` | Best balance of speed, quality, and cost |
-| Max tokens | 4,096 | Sufficient for all response types; hard caps cost |
-| Temperature | 0.3 (task execution) / 0.7 (conversation) | Low temp for reliable tool calls; higher for natural dialogue |
-| Streaming | Enabled (SSE) | Required for voice latency target |
-| Prompt caching | Enabled on system prompt | 60–70% token cost reduction on static content |
-| Tool choice | `auto` | Claude decides whether and which tools to use |
+**NLP Support: spaCy 3.x**
 
----
+spaCy handles lightweight, deterministic NLP tasks that do not require a full LLM call: named entity recognition (identifying contact names, dates, and file references within a command), tokenization, and sentence boundary detection for meeting transcript post-processing. Running spaCy on these extractions before invoking the AI Model Router reduces token usage and improves latency in both free and paid modes, since a significant portion of entity extraction can be resolved deterministically without LLM inference.
 
-#### 3.3.2 Speech-to-Text — Deepgram Nova-3
+**Speech-to-Text: faster-whisper (Free) / OpenAI Whisper API (Paid)**
 
-Deepgram Nova-3 is the STT engine for both real-time voice commands (F002) and meeting transcription (F038). The integration uses Deepgram's streaming WebSocket API, which processes audio chunks in real time and returns partial transcripts as the user speaks, with a final punctuated transcript delivered on silence detection.
+`faster-whisper` is a CTranslate2-based reimplementation of OpenAI Whisper, achieving 2–4x faster CPU inference than the original implementation with lower peak memory usage. The `base` model is the default; users may configure `small` or `medium` via settings, trading latency for accuracy (addressing SDD-OQ-2 from SYSTEM_DESIGN.md). In paid mode, the OpenAI Whisper API replaces local inference, reducing transcription latency to under 500ms for typical command lengths.
 
-Deepgram was selected primarily on latency: its streaming API returns first partial transcript tokens within 300ms of audio reception — faster than any alternative tested at similar accuracy levels. For meeting transcription, Nova-3 achieves over 95% word accuracy on clear English audio, meeting the PRD requirement of ≥ 90%.
+**Text-to-Speech: Coqui TTS (Free) / ElevenLabs API (Paid)**
 
-The streaming configuration used for voice commands is:
+Coqui TTS provides local voice synthesis using the VITS model (`tts_models/en/ljspeech/vits`), producing natural-sounding speech at approximately one second per sentence on CPU. In paid mode, the ElevenLabs API provides near-human voice quality at under 500ms latency. The ElevenLabs voice ID is user-configurable via settings; a default voice is pre-selected during onboarding.
 
-| Parameter | Value |
-|-----------|-------|
-| Model | `nova-3` |
-| Language | `en-US` |
-| Interim results | `true` (for live transcript display, F005) |
-| Endpointing | `700ms` silence threshold (voice commands) |
-| Smart format | `true` (punctuation, capitalisation) |
-| Utterance end | `10,000ms` (meeting transcription only) |
+**Wake Word Detection: Porcupine (Picovoice) 3.x**
 
-The fallback for Deepgram outages is OpenAI Whisper via the OpenAI API, which adds approximately 800ms of additional latency but maintains acceptable accuracy.
-
----
-
-#### 3.3.3 Text-to-Speech — ElevenLabs (Primary) + Google Cloud TTS (Fallback)
-
-ElevenLabs' `eleven_turbo_v2` model is the primary TTS engine. It was selected because it is the only widely available TTS service that supports streaming audio output — meaning audio playback can begin within 400ms of the first text token arriving from Claude, without waiting for the full response to be generated. This is architecturally non-negotiable for the voice-first experience.
-
-The voice used for Alex will be selected from ElevenLabs' pre-built professional voices library, targeting a calm, clear, professional-sounding male or neutral voice. Custom voice cloning is out of scope for v1.0 (F003 spec) but is architecturally easy to add in v1.5 since ElevenLabs supports it natively.
-
-Google Cloud Text-to-Speech (WaveNet `en-US-Neural2-J`) serves as the fallback in the event of ElevenLabs service degradation. It does not support streaming in the same way, which means the TTS fallback path will have a slightly longer perceived first-audio latency (600–900ms vs. 400ms), but remains within acceptable bounds for a fallback scenario.
-
----
-
-#### 3.3.4 Wake Word — Porcupine by Picovoice (v3)
-
-Porcupine handles always-on "Hey Alex" detection entirely on-device. It runs as a lightweight binary using the device's DSP chip, consuming approximately 1–2% CPU and negligible battery. No audio is ever transmitted to a server until the wake word is confirmed — a critical privacy and user trust requirement.
-
-The Porcupine React Native SDK provides a cross-platform wrapper for iOS and Android with a single JavaScript API. The wake word model file for "Hey Alex" is pre-trained by Picovoice and bundled with the app at approximately 1MB.
-
-**Why not Snowboy or custom keyword spotting:** Snowboy is no longer maintained. Custom keyword spotting (via TensorFlow Lite) would require significant ML engineering work and ongoing model maintenance that is not justified at this stage.
-
----
-
-#### 3.3.5 Embeddings — OpenAI text-embedding-3-small
-
-All semantic search in Alex — file search (F011) and memory retrieval (F052) — relies on vector embeddings generated by OpenAI's `text-embedding-3-small` model. This model produces 1536-dimensional embeddings and achieves a strong balance between retrieval quality and cost.
-
-At $0.02 per 1 million tokens, embedding costs for a single-user system are negligible: indexing a 2,000-file Google Drive (~10,000 chunks at ~200 tokens each) costs approximately $0.04 total. Daily re-embedding of changed files and new memories adds less than $0.01/day.
-
-The embedding model is accessed server-side only (API key never exposed to the client). Embeddings are generated in a BullMQ background job to ensure file indexing never blocks the main API response path.
-
-**Note on Anthropic Voyage:** Anthropic's Voyage embedding models (`voyage-3`) show superior retrieval quality on long documents and code. Switching to Voyage is listed as an improvement in v1.5 if file search accuracy falls below the 90% target with the current model.
+Porcupine provides always-on offline wake word detection. It runs on a dedicated background thread consuming under 5% CPU and operates with no network connectivity, satisfying the PRD's requirement for offline voice capability. The free tier supports one custom wake word ("Hey Alex") across up to three platforms. The Python SDK (`pvporcupine`) integrates directly with the Voice Layer background thread defined in SYSTEM_DESIGN.md Section 4.1.
 
 ---
 
 ### 3.4 Database & Storage
 
-#### 3.4.1 Primary Database — Supabase (PostgreSQL 16)
+**Primary Database: PostgreSQL 16 via Supabase**
 
-Supabase serves as the primary data store for all of Alex's structured and vector data. It was selected because it provides the full data infrastructure Alex needs — PostgreSQL, pgvector, real-time subscriptions, row-level security, storage, and authentication — in a single managed service. This avoids the operational overhead of running separate services for each concern.
+PostgreSQL 16 is the primary relational database, hosted on Supabase's managed platform. It stores all structured data: contacts, tasks, reminders, calendar events, preferences, audit logs, file metadata, and — via the pgvector extension — semantic embeddings. PostgreSQL 16 is chosen for its native `jsonb` column type (used for storing JSON arrays such as meeting participants and action items), row-level security (applicable when multi-user support is added in v1.1), full-text search capabilities, and the pgvector extension compatibility. Supabase provides automatic daily backups, connection pooling via PgBouncer, and a web-based table editor that accelerates development and debugging.
 
-The specific Supabase capabilities used by Alex:
+The database schema defined in SYSTEM_DESIGN.md Section 7.0 is carried forward directly, with SQLite data types replaced by PostgreSQL equivalents: `TEXT PRIMARY KEY` becomes `UUID PRIMARY KEY DEFAULT gen_random_uuid()`, and all timestamp columns use `TIMESTAMPTZ` for timezone-aware storage.
 
-**PostgreSQL 16** stores all structured data: users, sessions, tasks, events, contacts, memories, files metadata, sent messages, briefings, and automation plans. Full schema is defined in SYSTEM_DESIGN.md § 7.
+**Vector Storage: pgvector 0.7.x**
 
-**pgvector extension** handles semantic search for files (F011) and memory retrieval (F052) using cosine similarity. The IVFFlat index type is used with `lists = 100`, providing fast approximate nearest-neighbour search suitable for up to ~100,000 vectors before requiring migration to HNSW indexing.
+pgvector is installed as a PostgreSQL extension in the Supabase instance, replacing the separate ChromaDB deployment specified in SYSTEM_DESIGN.md. Two vector columns consolidate what were previously two ChromaDB collections: `conversation_memory.embedding vector(384)` for past interaction embeddings, and `file_semantic_index.content_embedding vector(384)` for file content embeddings. Similarity queries use pgvector's `<=>` cosine distance operator. An IVFFlat index is created on both columns once the row count exceeds 1,000 to maintain query performance as the dataset grows.
 
-**Supabase Realtime** powers the live automation progress tracker (F066) and any real-time UI updates via WebSocket subscriptions directly from the React Native app and Next.js dashboard — without requiring a separate WebSocket server.
+The consolidation of vector and relational storage into a single PostgreSQL instance eliminates a second database service to operate, back up, and monitor — a meaningful simplification for a v1.0 deployment.
 
-**Supabase Storage** stores pre-generated TTS audio files for morning briefings (F058). Audio files are stored in a `briefings` bucket with a CDN-backed public URL, eliminating re-generation latency on playback.
+**File Storage: Supabase Storage**
 
-**Row-Level Security (RLS)** is enabled on all tables, ensuring that even if the application logic has a bug, database-level policies prevent cross-user data access. Since Alex is single-user in v1.0, RLS policies are simple (`user_id = auth.uid()`), but they establish the correct security posture for multi-user expansion in v2.0.
+Supabase Storage provides an S3-compatible object storage API with access control policies integrated with Supabase Auth. Two buckets are provisioned for v1.0: `user-files` (documents explicitly uploaded by the user to Alex, such as attachments for email composition) and `meeting-recordings` (raw audio files from Meeting Copilot sessions, retained for re-transcription). Local file system indexing via Watchdog and Whoosh continues to operate for files that remain on the user's local machine and are not uploaded; these are indexed by metadata only and do not require cloud upload.
 
----
+**Cache: Redis 7.x**
 
-#### 3.4.2 Cache Layer — Upstash Redis (Serverless)
-
-Upstash provides serverless Redis with a REST API that is compatible with edge and serverless runtimes, in addition to the standard Redis protocol used by BullMQ. It stores:
-
-- Conversation session history (`session:{id}:history`, 24h TTL) — F051
-- Rate limiting counters (API endpoint abuse prevention)
-- BullMQ job queue backing store (all background and scheduled jobs — F067)
-- Temporary data within automation plan execution (inter-step result passing — F063)
-
-Upstash was selected over a self-managed Redis instance on Railway because its serverless billing model (pay per request, not per hour) is significantly cheaper at low volume. The free tier provides 10,000 commands/day, which is more than sufficient for a single-user system.
-
----
-
-#### 3.4.3 Local Device Storage — MMKV (React Native)
-
-`react-native-mmkv` provides fast synchronous key-value storage on the user's device, used for:
-
-- Caching the last known user preferences (tone, working hours, wake time) so the app is functional during brief network outages without needing to query Supabase
-- Storing the active session ID and conversation state so the app can resume correctly after being backgrounded
-- Storing OAuth tokens locally (encrypted using MMKV encryption key backed by the device keychain)
-
-MMKV was chosen over AsyncStorage because it is synchronous and approximately 30× faster, which matters for reading preferences at app startup before the first render.
+Redis serves as the application cache in addition to its role as the Celery message broker. Frequently accessed data — the user's preference object, recent file search results (60-second TTL), and calendar event snapshots (5-minute TTL) — is cached in Redis to avoid redundant database queries and AI model calls for repeated or near-identical requests. Redis Streams serve as the real-time event pipeline between action modules and the WebSocket handler.
 
 ---
 
 ### 3.5 Communication Layer
 
-#### 3.5.1 Email — Gmail API v1 (Google OAuth 2.0)
+**Email: Python stdlib (smtplib + imaplib)**
 
-The Gmail API is the only email integration in v1.0. Since the PRD established that the target user primarily uses Gmail (or Google Workspace), a direct Gmail integration via OAuth is the correct approach — no email relay service (SendGrid, Postmark) is needed for the sending case, and no IMAP parsing is needed for the reading case.
+Outbound email uses Python's standard library `smtplib` with STARTTLS encryption over port 587. Inbound email reading — for the morning briefing's priority inbox summary — uses `imaplib` over SSL on port 993. No third-party email library is required for v1.0. Gmail is the default provider; any SMTP/IMAP provider is configurable via the settings panel. Email credentials are stored encrypted in Supabase Vault. For v1.1, SendGrid or Resend are candidates for transactional email with delivery tracking, but this is out of scope for v1.0.
 
-The Gmail API scopes required are:
+**WhatsApp: Twilio**
 
-| Scope | Purpose | Feature |
-|-------|---------|---------|
-| `gmail.send` | Send emails on user's behalf | F018 |
-| `gmail.readonly` | Read inbox for briefing important emails | F057 |
-| `gmail.compose` | Create drafts | F019 |
+Twilio's WhatsApp Sandbox (free tier) provides WhatsApp messaging capability for personal use in v1.0. Messages and file attachments are dispatched via the Twilio Python SDK. The free sandbox requires recipients to send an opt-in message to the sandbox number before they can receive messages — acceptable for v1.0 given the personal-use scope, but acknowledged as a limitation in Section 6.0.
 
-OAuth 2.0 refresh tokens are stored encrypted in Supabase (`oauth_tokens` table, AES-256 encryption via Supabase Vault). Tokens are refreshed automatically using `google-auth-library` before any Gmail API call.
+For production-grade messaging without the opt-in limitation, the Twilio WhatsApp Business API is the paid upgrade path. The underlying API client code is identical; only the sender number and account credentials differ, making the upgrade transparent to the rest of the system.
 
-**Outlook / SMTP support** is explicitly out of scope for v1.0 (PRD § 8.0). The architecture isolates the email adapter (SYSTEM_DESIGN.md § 4.5.1) so adding an Outlook adapter in v1.5 is a contained change.
+**Push Notifications: WebSocket + Web Notifications API**
 
----
-
-#### 3.5.2 WhatsApp — Meta WhatsApp Business Cloud API v21.0
-
-The Meta WhatsApp Business Cloud API is the only compliant method for sending WhatsApp messages programmatically from a business application. The Cloud API (Meta-hosted) is used rather than the On-Premises API because it requires no server infrastructure on Alex's side for the WhatsApp gateway — Meta hosts the gateway and Alex calls the REST endpoint.
-
-Key integration details:
-
-| Attribute | Value |
-|-----------|-------|
-| API version | v21.0 |
-| Endpoint | `https://graph.facebook.com/v21.0/{phone-number-id}/messages` |
-| Auth | Permanent system user access token (Meta App) |
-| Webhooks | Delivery status updates → `POST /webhooks/whatsapp` |
-| Media upload | `POST /{phone-number-id}/media` then reference media ID |
-| Message types used | `text`, `document`, `template` |
-
-The 24-hour session window constraint (F023) requires maintaining a `last_whatsapp_interaction_at` timestamp per contact. Approved message templates must be pre-registered with Meta for use outside the 24-hour window; this is an operational requirement (not purely an engineering one) that must be completed before the WhatsApp feature ships.
-
----
-
-#### 3.5.3 Push Notifications — Firebase Cloud Messaging (FCM v1)
-
-Firebase Cloud Messaging handles all push notifications to iOS and Android: task reminders (F036), briefing notifications (F059), automation completion alerts (F066), and overdue task warnings (F035).
-
-FCM v1 (the HTTP v1 API, not the legacy API) is used. It is required for iOS notifications (APNs) and is the current recommended API — the legacy FCM API was deprecated in June 2024.
-
-The notification flow is:
-
-1. BullMQ job triggers notification dispatch at the scheduled time
-2. Server calls FCM v1 HTTP API with device token + notification payload
-3. FCM delivers to iOS (via APNs) or Android (direct)
-4. React Native app handles notification via `expo-notifications`
-
-Device tokens are stored in `users.fcm_token` in Supabase and refreshed each time the app is opened (tokens rotate periodically).
+In-app notifications — reminder alerts, action completion confirmations, briefing availability — are delivered to the frontend via the persistent WebSocket connection. For browser notifications when the dashboard is not in the foreground, the Web Notifications API (requiring one-time user permission grant) is used, requiring no external notification service.
 
 ---
 
 ### 3.6 Automation & Integrations
 
-#### 3.6.1 Job Queue — BullMQ 5 + Upstash Redis
+**Workflow Automation: n8n 1.x (Self-Hosted)**
 
-BullMQ is the background job and task scheduling engine for all of Alex's asynchronous work. It runs as a separate Worker process alongside the main Express API server on Railway. The following job types are registered:
+n8n is deployed as a self-hosted Docker container on Railway alongside the FastAPI backend. It provides a visual workflow builder with over 400 pre-built integrations, enabling Alex to trigger external workflows — posting a Slack summary after a meeting is processed, creating a linear task from an extracted action item, or updating a Notion page — without writing custom integration code for each service.
 
-| Job Name | Schedule | Purpose | Features |
-|----------|----------|---------|---------|
-| `briefingJob` | Cron: `0 7 * * *` (configurable) | Generate morning briefing | F057 |
-| `fileIndexJob` | Cron: `*/15 * * * *` | Delta sync Google Drive | F010 |
-| `overdueScanJob` | Cron: `0 * * * *` | Mark tasks overdue | F035 |
-| `preMeetingJob` | Delayed: `event.start - 10min` | Surface relevant files | F042 |
-| `memoryConsolidationJob` | Cron: `0 23 * * *` | Summarise day to episodic memory | F053 |
-| `reminderJob` | Delayed: `task.due_at` | Fire reminder notification | F036 |
-| `automationPlanJob` | On-demand | Execute multi-step plans | F063 |
-| `embeddingJob` | On-demand (after file index) | Generate file embeddings | F010 |
+n8n is chosen over Zapier and Make because it is fully open-source and self-hostable at zero per-execution cost. The FastAPI backend triggers n8n workflows by sending HTTP webhook events when specific actions complete. n8n handles all downstream integration logic. Workflow definitions are exported as JSON files and committed to the repository under `n8n-workflows/`, ensuring version control of automation logic.
 
-BullMQ's delayed job support (scheduling a job to run at a specific future timestamp) is essential for reminders and pre-meeting prep — two features that require precise time-based execution, not just periodic polling.
+A critical deployment note: n8n defaults to a local SQLite file for workflow and execution history persistence. On Railway's ephemeral filesystem, this data would be lost on redeploy. n8n must be configured to use the Supabase PostgreSQL instance as its backing store (addressed in Section 6.0, TS-OQ-3).
 
----
+**Google Calendar API v3**
 
-#### 3.6.2 Google API Suite
+Calendar integration uses the Google Calendar API v3 with OAuth 2.0 authentication. The `google-auth` and `google-api-python-client` Python libraries handle authentication token management and API calls. The OAuth refresh token is stored encrypted in Supabase Vault. A Celery Beat task polls calendar events every 5 minutes and caches the result in the `calendar_events` PostgreSQL table. Event creation (booking meetings) uses the `events.insert` method. Google Calendar is the only provider in v1.0; multi-provider support (Outlook Calendar, iCal) is deferred to v1.1 as specified in SYSTEM_DESIGN.md.
 
-Three Google APIs are used via the same OAuth 2.0 credentials obtained during onboarding. A single `GoogleAuthClient` module manages token refresh and provides authenticated clients for all three services.
+**API Testing: Postman + Newman**
 
-| API | Version | SDK | Features |
-|-----|---------|-----|---------|
-| Gmail API | v1 | `googleapis` npm | F017, F018, F019, F020, F057 |
-| Google Calendar API | v3 | `googleapis` npm | F025, F026, F027, F028, F029, F030, F031 |
-| Google Drive API | v3 | `googleapis` npm | F010, F011, F013 |
-| Google People API | v1 | `googleapis` npm | F024 (contact seeding) |
-| Google Cloud TTS | v1 | `@google-cloud/text-to-speech` | F003 (fallback) |
-
-All Google APIs are accessed via the official `googleapis` npm package, which handles OAuth token management, retry logic, and request signing uniformly across all services.
-
----
-
-#### 3.6.3 Chrono-Node (Date Parsing)
-
-`chrono-node` is a natural language date/time parser for Node.js. It converts expressions like "Friday at 9 AM", "next Thursday afternoon", "in 2 hours", and "end of the month" into JavaScript `Date` objects. This is used in F032 (Task Creation), F026 (Event Creation), and F036 (Reminder scheduling).
-
-**Why not rely on Claude for date parsing:** While Claude can interpret dates contextually, passing date strings to Claude and having it return parsed dates adds a round-trip to the LLM. `chrono-node` runs synchronously in microseconds and produces deterministic output, making it the correct tool for this discrete sub-problem.
-
----
-
-#### 3.6.4 PDF and Document Parsers
-
-File text extraction for the indexing pipeline (F010) uses the following parser stack:
-
-| File Type | Library | Notes |
-|-----------|---------|-------|
-| PDF | `pdf-parse` | Extracts raw text; handles multi-page; no OCR |
-| DOCX | `mammoth` | High-quality DOCX → plain text; preserves structure |
-| XLSX | `xlsx` (SheetJS) | Converts spreadsheet cells to structured text |
-| Google Docs | Drive export API | Export as `text/plain` via Drive API |
-| Google Sheets | Sheets API | Read cell values via Sheets API v4 |
-| TXT / MD | Native `fs.readFile` | Direct string read |
+Postman is used for endpoint testing, collection management, and post-deployment smoke testing. A Postman collection is maintained for every API endpoint group defined in SYSTEM_DESIGN.md Section 6.0: Command & Confirmation, File Search, Tasks & Reminders, Calendar, Communication, Memory & Preferences, Settings, and Health. The collection is exported as `postman_collection.json` and committed to the repository. Newman, Postman's CLI runner, executes this collection in the GitHub Actions pipeline after each deployment as the final smoke test stage, ensuring every critical endpoint is functional before traffic is routed to the new build.
 
 ---
 
 ### 3.7 Infrastructure & Hosting
 
-#### 3.7.1 Backend Hosting — Railway
+**Frontend Hosting: Vercel**
 
-The Node.js backend (Express API server + BullMQ worker) is hosted on Railway. Railway was selected over serverless alternatives (Vercel Serverless Functions, Cloudflare Workers) for one critical architectural reason: Alex's backend requires **always-on, persistent processes**.
+The Next.js frontend is deployed to Vercel. Vercel provides zero-configuration CI/CD for Next.js, automatic HTTPS, a global CDN, and preview deployments for every pull request (enabling design review before merging). The frontend is built in Next.js static export mode (`output: 'export'`), producing a fully static HTML/JS/CSS bundle with no server-side compute required. This keeps the deployment entirely within Vercel's free tier regardless of traffic volume. Environment variables — Supabase URL, Supabase anon key, WebSocket endpoint — are configured in Vercel's environment variable manager and injected at build time.
 
-The Express server maintains open WebSocket connections to Deepgram (during active voice sessions), streams SSE responses to the mobile app, and runs BullMQ workers that must be alive to process scheduled jobs. Serverless functions that cold-start on each request and terminate after the response would break all three of these requirements. A 5-second cold start on a serverless function would violate the ≤ 2 second latency target before a single line of application code executes.
+**Backend Hosting: Railway**
 
-Railway's `Hobby` plan provides always-on deployments at $5/month per service with 8GB RAM and 8 vCPUs — more than adequate for a single-user system. Railway also provides automatic deployments from GitHub, environment variable management, and built-in metrics.
-
-| Service | Railway Configuration |
-|---------|----------------------|
-| `alex-api` | Node.js 22, always-on, 512MB RAM, auto-restart |
-| `alex-worker` | Node.js 22 (BullMQ worker), always-on, 256MB RAM |
-
----
-
-#### 3.7.2 Web Dashboard Hosting — Vercel
-
-The Next.js web dashboard is hosted on Vercel. Vercel is the natural hosting choice for Next.js (being its creator) and provides zero-configuration deployment, automatic preview deployments on pull requests, edge CDN for static assets, and the most optimised Next.js build pipeline available. The free Hobby plan is sufficient for a single-user web dashboard with low traffic.
-
----
-
-#### 3.7.3 CI/CD — GitHub Actions
-
-GitHub Actions provides the CI/CD pipeline. The pipeline runs on every push to `main` and every pull request:
+The FastAPI backend, Celery workers, Redis, and n8n are deployed on Railway as separate services within a single project. Railway is chosen over Render because it provides native Docker Compose support, private internal networking between services (eliminating inter-service data transfer costs and reducing latency), persistent volumes for Redis and n8n data, and a more developer-friendly deployment dashboard. The five-service deployment model is:
 
 ```
-On Pull Request:
-  1. pnpm install (cached)
-  2. TypeScript type check (tsc --noEmit)
-  3. ESLint + Prettier lint check
-  4. Unit tests (Vitest)
-  5. Build check (backend + web)
-
-On Push to main:
-  1. All PR checks above
-  2. Deploy backend → Railway (via Railway deploy hook)
-  3. Deploy web → Vercel (automatic via Vercel GitHub integration)
-  4. EAS Update (Expo) → push JS bundle update to mobile app
-     (no App Store review required for JS-only changes)
+Railway Project: alex-backend
+  ├── Service: api      (FastAPI + Uvicorn)
+  ├── Service: worker   (Celery worker)
+  ├── Service: beat     (Celery beat scheduler)
+  ├── Service: redis    (Redis 7-alpine)
+  └── Service: n8n      (n8nio/n8n:latest)
 ```
 
-EAS Update is used for mobile deployments. Because React Native with Expo allows over-the-air (OTA) JS bundle updates without App Store review, most backend-driven feature changes can be shipped to mobile users within minutes of merging to main.
+All services communicate over Railway's private internal network. Only the `api` service is exposed to the public internet, on the Railway-assigned HTTPS URL.
 
----
+**Containerization: Docker + Docker Compose**
 
-#### 3.7.4 Monorepo — Turborepo + pnpm
+All backend services are containerized with Docker. A `docker-compose.yml` at the repository root defines the complete local development environment, enabling any developer to run the full Alex stack with a single `docker compose up` command. The same Docker images used in local development are pushed to GitHub Container Registry and deployed to Railway, ensuring complete development-to-production environment parity.
 
-The entire Alex codebase is organised as a pnpm monorepo managed by Turborepo:
+Ollama is included in the Docker Compose configuration for local development (where free-mode AI runs locally) but is excluded from the Railway deployment. This distinction — and its implications for free-mode users accessing Alex via the hosted web frontend — is addressed in Section 6.0, TS-OQ-1.
 
-```
-alex/
-├── apps/
-│   ├── mobile/          # React Native (Expo)
-│   └── web/             # Next.js dashboard
-├── packages/
-│   ├── api/             # Express backend
-│   ├── worker/          # BullMQ worker process
-│   ├── types/           # Shared TypeScript interfaces
-│   ├── db/              # Supabase client + schema types (generated)
-│   └── tools/           # Claude tool definitions (shared types)
-└── turbo.json           # Build pipeline configuration
-```
+**CI/CD: GitHub Actions**
 
-Turborepo's build caching means unchanged packages are not rebuilt on each CI run, significantly reducing CI time as the codebase grows.
+GitHub Actions orchestrates the complete build and deploy pipeline. On every push to `main`, the pipeline runs in seven sequential stages: lint (Ruff, mypy, ESLint), test (pytest, Vitest), Docker build, image push to GitHub Container Registry, Railway API deployment, Vercel frontend deployment (via Vercel's GitHub integration, triggered automatically), and Newman smoke test. On pull requests, only lint and test stages run — no deployment is triggered. This prevents broken builds from reaching production while keeping the deployment process fully automated for validated changes.
 
 ---
 
 ### 3.8 Monitoring & Debugging
 
-#### 3.8.1 Error Tracking — Sentry
+**Error Tracking: Sentry**
 
-Sentry captures unhandled exceptions, promise rejections, and explicitly reported errors across the React Native app, Next.js web dashboard, and Node.js backend. The `@sentry/react-native`, `@sentry/nextjs`, and `@sentry/node` SDKs are installed in their respective packages and configured with the same Sentry project DSN.
+Sentry is integrated into both the FastAPI backend and the Next.js frontend. The Python `sentry-sdk` package is initialized with FastAPI and Celery integrations, capturing unhandled exceptions, slow database queries, and Celery task failures with full stack traces and request context. The `@sentry/nextjs` package captures JavaScript errors and Core Web Vitals on the frontend. Sentry is configured to alert via email (and optionally Slack, via n8n) when the error rate exceeds five errors per hour for any endpoint, when a Celery task fails more than three consecutive times, or when API response time exceeds three seconds.
 
-Sentry is configured to capture the following context with every error event: session ID, user ID (hashed), the last 3 conversation turns (truncated), the active automation plan (if any), and the specific tool call that was executing at the time of failure. This context makes debugging tool execution failures significantly faster.
+**Metrics: Prometheus + Grafana (Self-Hosted on Railway)**
 
-Source maps are uploaded to Sentry on every deployment, enabling production stack traces to be mapped back to original TypeScript source lines.
+Prometheus scrapes metrics from the FastAPI application every 15 seconds via the `/metrics` endpoint, exposed by the `prometheus-fastapi-instrumentator` library. Metrics collected include: HTTP request count and latency by endpoint (p50, p95, p99), active WebSocket connections, Celery task queue depth by queue name, Redis memory usage, and AI model inference latency segmented by provider (free vs. paid). Grafana is deployed alongside Prometheus on Railway, connected as a Prometheus data source. Four dashboards are provisioned out-of-the-box: System Overview, API Performance, AI Model Performance, and Communication Delivery (email and WhatsApp success rates). Grafana is accessible only on an authenticated internal URL not exposed publicly.
 
----
+**Structured Logging: structlog**
 
-#### 3.8.2 Product Analytics — PostHog
+All backend logging uses `structlog` for structured JSON output, replacing Python's standard `logging` module. Every log entry includes `timestamp`, `level`, `service`, `session_id`, `action`, `duration_ms`, and `error` fields, making logs machine-parseable and queryable. Logs are written to stdout (captured by Railway's 7-day log retention) and simultaneously to the `audit_logs` PostgreSQL table, where they persist for 90 days (general logs) and 180 days (error logs), as specified in SYSTEM_DESIGN.md.
 
-PostHog tracks product usage events to measure the success metrics defined in PRD.md § 3.2. The events captured include:
+**API Documentation: Swagger / OpenAPI 3.1**
 
-| Event | Properties | Purpose |
-|-------|-----------|---------|
-| `voice_command_started` | `mode: voice/text` | Track voice adoption |
-| `intent_resolved` | `tool_called`, `latency_ms` | Measure intent accuracy |
-| `file_search_completed` | `result_count`, `top_score`, `success` | Track F011 performance |
-| `email_sent` | `has_attachment`, `contact_known` | Communication feature usage |
-| `briefing_opened` | `time_after_generation_mins` | Briefing engagement |
-| `task_completed` | `overdue`, `source` | Task management health |
-| `automation_plan_completed` | `step_count`, `partial_failure` | Automation reliability |
-
-PostHog is self-hostable (relevant for data privacy) and has a generous free cloud tier of 1 million events/month — far beyond what a single-user system will generate.
-
----
-
-#### 3.8.3 Log Management — Axiom
-
-Axiom aggregates structured JSON logs from the Railway backend and BullMQ worker. Every significant system event is logged in a consistent format (defined in SYSTEM_DESIGN.md § 4.8.2): timestamp, session ID, event type, tool name, status, latency, and error detail.
-
-Axiom's query language allows filtering logs by session, tool, or time range in seconds — critical for debugging a production issue where a specific automation plan failed for a user. The free tier provides 500GB ingest/month, which comfortably covers single-user volume.
-
----
-
-#### 3.8.4 API Development & Testing — Postman
-
-Postman is used for all API development, testing, and documentation. A Postman collection covering all endpoints defined in SYSTEM_DESIGN.md § 6 is maintained in the repository (exported as JSON) and kept in sync with the live API.
-
-Postman's environment variables allow the team to switch between local development, staging, and production endpoints without modifying requests. Mock servers (Postman's built-in feature) are used to develop the React Native app against API endpoints before the backend implementation is complete.
+FastAPI generates OpenAPI 3.1 documentation automatically from route definitions and Pydantic schemas, available at `GET /docs` (Swagger UI) and `GET /redoc` (ReDoc). In production, these endpoints are protected by the internal API key to prevent public exposure. The OpenAPI JSON schema at `GET /openapi.json` is consumed by the Postman collection sync script to keep test collections current with the actual API contract.
 
 ---
 
 ### 3.9 Development Tools
 
-#### 3.9.1 Version Control — GitHub
+**Version Control: Git + GitHub**
 
-GitHub hosts the monorepo. Branch protection rules are configured on `main`: pull requests require at least one review and passing CI checks before merge. Releases are tagged semantically (`v1.0.0`, `v1.0.1`) and linked to Railway deployments.
+The repository is hosted on GitHub (private) and follows GitHub Flow: `main` is always deployable, feature work is developed on short-lived branches, and pull requests require passing CI before merge. The repository is structured as a monorepo:
 
-**Repository structure:**
-- `main` — production branch (protected)
-- `dev` — integration branch for feature work
-- `feature/*` — individual feature branches (from FEATURE_LIST.md IDs: e.g., `feature/F011-semantic-search`)
+```
+alex/
+  ├── frontend/           (Next.js application)
+  ├── backend/            (FastAPI application)
+  │   ├── api/            (route handlers)
+  │   ├── services/       (business logic modules)
+  │   ├── models/         (Pydantic + SQLAlchemy models)
+  │   ├── workers/        (Celery task definitions)
+  │   └── ai/             (AI Model Router and sub-components)
+  ├── n8n-workflows/      (exported n8n workflow JSON files)
+  ├── docker-compose.yml
+  ├── .github/workflows/  (CI/CD pipeline definitions)
+  └── docs/               (all 7 documentation files)
+```
 
----
+**Package Management: uv (Python) + pnpm (Node.js)**
 
-#### 3.9.2 IDE — VS Code (Recommended)
+Python packages are managed with `uv`, a Rust-based package manager that resolves and installs dependencies 10–100x faster than pip and produces a `uv.lock` file for deterministic installs. Node.js packages are managed with `pnpm`, chosen for its disk-efficient `node_modules` structure and strict dependency isolation that prevents phantom dependencies. Both lock files are committed to the repository and used in CI for reproducible builds.
 
-VS Code is the recommended IDE with the following extensions mandatory for consistency:
+**Code Quality: Ruff + mypy + ESLint**
 
-| Extension | Purpose |
-|-----------|---------|
-| ESLint | Real-time linting |
-| Prettier | Auto-formatting on save |
-| TypeScript (built-in) | Type checking |
-| Tailwind CSS IntelliSense | Tailwind class completion |
-| Supabase | Database schema browsing |
-| Thunder Client | Lightweight REST client (alternative to Postman for quick tests) |
-| GitLens | Enhanced git history and blame |
+Python code is linted and formatted by Ruff, which replaces both flake8 and black in a single, significantly faster tool. Type checking is enforced by mypy in strict mode. TypeScript strict mode is enabled for all frontend code. ESLint is configured with the `next/core-web-vitals` ruleset. All linting runs in pre-commit hooks (via the `pre-commit` framework) and in the CI pipeline, ensuring no unformatted or type-unsafe code reaches `main`.
 
-A shared `.vscode/settings.json` and `.vscode/extensions.json` are committed to the repository so all team members work with an identical IDE configuration.
+**Secret Management: python-dotenv + Supabase Vault**
 
----
+Development secrets are stored in a `.env` file loaded by `python-dotenv` and are never committed to version control (enforced by `.gitignore` and a pre-commit hook that scans for accidental secret commits). Production secrets are managed in two places: Railway's environment variable manager for infrastructure secrets (DATABASE_URL, REDIS_URL, SENTRY_DSN), and Supabase Vault for user-specific sensitive data (email credentials, WhatsApp API keys, paid AI API keys). This distinction is important: infrastructure secrets belong to the deployment environment; user secrets belong to the user's data layer and must be encrypted at rest, as specified in SYSTEM_DESIGN.md.
 
-#### 3.9.3 Package Management — pnpm 9
+**IDE: VS Code (Recommended)**
 
-`pnpm` is used as the package manager across the entire monorepo. Its key advantages over `npm` and `yarn` for this project are: a global content-addressable store that prevents duplicate package installations across workspaces (critical for a monorepo with shared dependencies), strict hoisting behaviour that prevents phantom dependencies, and installation speeds approximately 3× faster than `npm` — which matters when CI runs `pnpm install` on every PR.
-
-A single `pnpm-lock.yaml` at the repo root ensures deterministic installs across all developers and CI environments.
-
----
-
-#### 3.9.4 Code Quality — ESLint + Prettier + Husky
-
-ESLint with `@typescript-eslint` enforces code quality rules. Prettier handles formatting with zero configuration (default Prettier rules). Both run as pre-commit hooks via Husky and `lint-staged`, ensuring no unformatted or linting-error code enters the repository.
-
-A `commitlint` configuration enforces conventional commit messages (`feat:`, `fix:`, `chore:`) to maintain a clean git history suitable for automated changelog generation.
-
----
-
-#### 3.9.5 Testing — Vitest + Detox
-
-**Unit and integration tests:** Vitest is the test runner for the Node.js backend and shared packages. It is TypeScript-native, significantly faster than Jest, and compatible with the ES module setup used across the monorepo.
-
-**Mobile E2E tests:** Detox (by Wix) handles end-to-end testing on iOS and Android simulators. Critical flows tested automatically: onboarding, voice command routing, email send, task creation, and morning briefing delivery.
-
-**API contract tests:** Postman Newman (the CLI runner for Postman collections) runs the Postman collection against the staging environment as part of the CI pipeline before any production deployment.
+VS Code is the recommended IDE. The following extensions are configured in `.vscode/extensions.json`: Pylance (Python language server), Ruff (inline linting and formatting), ESLint + Prettier, Tailwind CSS IntelliSense, Docker, GitLens, and the Postman VS Code extension for inline API testing without leaving the editor. A shared `.vscode/settings.json` configures format-on-save, the Python interpreter path, and TypeScript strict mode, ensuring a consistent development experience across the team.
 
 ---
 
 ## 4.0 Rejected Alternatives
 
-The following technologies were evaluated and rejected. Their rejection rationale is documented here to prevent the same alternatives from being re-evaluated in the future without new information.
-
-| Category | Rejected | Chosen Instead | Rejection Reason |
-|----------|---------|---------------|-----------------|
-| LLM | OpenAI GPT-4o | Claude claude-sonnet-4-20250514 | Claude has superior tool-use reliability and prompt caching; GPT-4o's tool call hallucination rate was higher in testing on complex multi-step plans |
-| LLM | Google Gemini 2.0 | Claude claude-sonnet-4-20250514 | Weaker tool-use consistency; streaming API more complex to integrate; less established for agentic use cases |
-| STT | OpenAI Whisper API | Deepgram Nova-3 | Whisper API does not support streaming — it requires full audio upload before returning transcript. This adds 1–3 seconds of latency unacceptable for the voice-first UX |
-| STT | Google Cloud Speech-to-Text | Deepgram Nova-3 | Google's streaming STT has higher latency for first partial results (~600ms vs. ~300ms); Deepgram consistently outperforms on accuracy benchmarks for conversational English |
-| TTS | OpenAI TTS | ElevenLabs eleven_turbo_v2 | OpenAI TTS does not support streaming audio generation in the same chunk-by-chunk manner; first audio chunk latency is higher (~800ms vs. ~400ms) |
-| TTS | Amazon Polly | ElevenLabs eleven_turbo_v2 | Polly's neural voices sound noticeably more synthetic than ElevenLabs; no streaming support |
-| Vector DB | Pinecone | pgvector (in Supabase) | Pinecone adds an additional managed service, cost layer, and network hop. At single-user scale with < 20,000 vectors, pgvector's IVFFlat index is fast enough and eliminates operational complexity. Pinecone is reconsidered at v2.0 multi-user scale. |
-| Vector DB | Weaviate | pgvector (in Supabase) | Same rationale as Pinecone — additional service overhead not justified at this scale |
-| Backend Framework | NestJS | Express.js 5 | NestJS's DI container and decorator system add cognitive overhead without benefit at this team size; harder to control SSE streaming behaviour precisely |
-| Backend Framework | Fastify | Express.js 5 | Fastify's plugin-based architecture complicates the custom streaming pipeline needed for Claude SSE → TTS; Express gives full control |
-| Backend Hosting | Vercel Serverless | Railway (always-on) | Cold starts (1–5 seconds) violate the latency target; serverless cannot hold persistent WebSocket connections to Deepgram or BullMQ workers |
-| Backend Hosting | Cloudflare Workers | Railway (always-on) | Workers have a 30-second CPU time limit unsuitable for long meeting transcriptions or multi-step automation plans; no persistent storage for WebSocket sessions |
-| Database | Firebase Realtime DB | Supabase (PostgreSQL) | Firebase's document model does not support the complex relational queries and vector search Alex requires; no SQL |
-| Database | PlanetScale (MySQL) | Supabase (PostgreSQL) | MySQL does not have pgvector; would require a separate vector DB, adding operational complexity |
-| Cache | Redis Cloud (Redis Ltd) | Upstash Redis | Redis Cloud's minimum paid tier ($7/month) is more expensive than Upstash at low volume; Upstash's serverless billing is better suited to variable single-user load |
-| Mobile | Flutter | React Native (Expo) | Dart is a second language with no overlap with the TypeScript backend; weaker ecosystem for audio streaming and native Porcupine integration |
-| Mobile | Native iOS + Android | React Native (Expo) | Two codebases require double the mobile engineering effort; not feasible for a lean team |
-| State Management | Redux Toolkit | Zustand | Redux adds significant boilerplate (actions, reducers, selectors) for state that is simple enough to manage with Zustand's direct mutation model |
-| Automation/Workflow | Zapier / Make | Custom BullMQ + Claude planner | Third-party automation platforms cannot be called from within Claude's tool-use loop; they are user-facing no-code tools, not programmable APIs suitable for AI agent orchestration |
-| Email Relay | SendGrid | Gmail API directly | SendGrid would be used for sending emails from Alex's own email address, not the user's Gmail account. Since Alex sends on the user's behalf, only Gmail API (OAuth) achieves the correct sender identity |
-| Analytics | Mixpanel | PostHog | PostHog is open-source and self-hostable; Mixpanel has no self-hosting option and is significantly more expensive at scale |
+| Technology | Category | Reason for Rejection |
+|-----------|----------|----------------------|
+| Flask | Backend framework | No native async support; additional libraries (Flask-Async, Flask-SocketIO) required to match FastAPI's built-in capabilities, adding complexity without benefit. |
+| Django | Backend framework | ORM, admin, and middleware overhead is unnecessary for Alex's API-first, single-user architecture. FastAPI provides equivalent routing and validation at a fraction of the footprint. |
+| Express.js / Node.js | Backend language + framework | All AI/ML dependencies are Python-native. Node.js would require a Python subprocess or sidecar for AI operations, splitting the codebase across two languages unnecessarily. |
+| ChromaDB | Vector store | Superseded by pgvector. Consolidating vector and relational storage in a single PostgreSQL instance eliminates a separate database to operate, back up, and monitor, simplifying the deployment significantly. |
+| SQLite | Primary database | Appropriate for local-only single-user systems but lacks the concurrent connections, row-level security, vector extensions, and managed hosting required for the cloud-deployed architecture. Superseded by PostgreSQL via Supabase. |
+| Pinecone | Vector database | Managed vector-only database with no free production tier. pgvector achieves equivalent functionality within the existing PostgreSQL infrastructure at zero additional cost. |
+| Firebase (Firestore) | BaaS | Firebase uses NoSQL (Firestore), which is a poor fit for Alex's highly relational data model — tasks linked to meetings, reminders linked to tasks, contacts linked to interaction history. Supabase provides PostgreSQL with equivalent developer experience. |
+| Zapier / Make | Workflow automation | Both are cloud-only SaaS platforms with per-task pricing that escalates with volume. n8n self-hosted provides identical integration capabilities at zero per-execution cost, consistent with the free-mode-first principle. |
+| Render | Backend hosting | Railway is preferred for its native Docker Compose support, private internal networking, persistent volumes, and more generous free compute allowance. Render's free tier suspends inactive services, which would disrupt Celery workers and scheduled briefing delivery. |
+| RabbitMQ | Message broker | A capable Celery broker but requires a separate deployment with its own management overhead. Redis serves both the broker and cache roles simultaneously, reducing service count. |
+| LangChain | LLM orchestration | Adds significant abstraction overhead and has historically had frequent breaking changes between minor versions. Alex's AI Model Router is a simple, stable abstraction that does not require LangChain's full agent and chain framework. Direct API calls are more maintainable and performant for Alex's specific workloads. |
+| Vite + plain React | Frontend | Lacks the integrated routing, layout system, and Vercel deployment optimization that Next.js provides. Assembling an equivalent setup with React Router and manual CI/CD configuration adds unnecessary setup work. |
+| Chakra UI | UI components | Requires a JavaScript runtime CSS-in-JS dependency and theme provider. shadcn/ui is Tailwind-native with no runtime overhead, and ships component source code directly into the project for full customization control. |
+| Deepgram | Speech-to-Text | Cloud-only with no free production tier. faster-whisper runs locally at zero cost and matches Deepgram's accuracy on English transcription at the `small` model size. |
+| ElevenLabs (free mode) | Text-to-Speech | Requires an API key and internet connectivity, violating the free-mode offline-capable requirement. Coqui TTS provides equivalent functionality locally at no cost. |
+| ARQ | Task queue | A simpler async Redis queue for Python, but lacks Celery Beat's mature scheduling capabilities, which are required for reminder firing, calendar sync, and briefing generation. |
 
 ---
 
@@ -643,129 +380,80 @@ The following technologies were evaluated and rejected. Their rejection rational
 
 ### 5.1 Free Tier Limits by Service
 
-| Service | Free Tier | Paid Tier Starts At |
-|---------|-----------|---------------------|
-| **Anthropic Claude API** | No free tier; $3/MTok input, $15/MTok output (Sonnet 4) | Usage-based only |
-| **Deepgram** | $200 credit on signup (~55 hours of audio) | $0.0043/min streaming after credit |
-| **ElevenLabs** | 10,000 characters/month | Creator: $22/mo (100,000 chars) |
-| **Google Cloud TTS** | 1M characters/month (WaveNet: 1M chars free) | $16/1M chars (WaveNet) after free tier |
-| **Picovoice (Porcupine)** | Free for personal/non-commercial use | $0 (free unlimited for single-user personal app) |
-| **OpenAI Embeddings** | No free tier; $0.02/1M tokens | Usage-based only |
-| **Supabase** | Free: 500MB DB, 1GB storage, 2M realtime messages/mo | Pro: $25/month (8GB DB, 250GB storage) |
-| **Upstash Redis** | Free: 10,000 commands/day, 256MB | Pay-as-you-go: $0.20/100K commands |
-| **Railway** | Free: $5 credit/month (~500 hours) | Hobby: $5/month per service (always-on) |
-| **Vercel** | Free: Hobby plan (personal projects) | Pro: $20/month (for teams) |
-| **Firebase (FCM)** | Free: unlimited notifications | Free forever for FCM |
-| **Sentry** | Free: 5,000 errors/month, 10K transactions | Team: $26/month |
-| **PostHog** | Free: 1M events/month | Scale: $0.00045/event after 1M |
-| **Axiom** | Free: 500GB ingest/month | Pro: $25/month |
-| **GitHub** | Free: unlimited private repos + 2,000 CI minutes/month | Team: $4/user/month |
-| **Gmail API** | Free: 1B quota units/day | No paid tier — included in Google account |
-| **Google Calendar API** | Free: 1M requests/day | No paid tier — included in Google account |
-| **Google Drive API** | Free: 1B quota units/day | No paid tier — included in Google account |
-| **Meta WhatsApp API** | Free: 1,000 user-initiated conversations/month | $0.005–$0.015 per conversation after free tier (India pricing) |
+| Service | Free Tier Limits | Notes |
+|---------|-----------------|-------|
+| Supabase | 500 MB database, 1 GB file storage, 50,000 MAU, 2 GB bandwidth/month, daily backups | Well within single-user v1.0 requirements |
+| Vercel | 100 GB bandwidth/month, unlimited deployments, 6,000 build minutes/month | Single-user frontend needs are a fraction of this limit |
+| Railway | $5 free credit/month (~500 compute hours at shared CPU) | Covers API + Celery + Redis + n8n for low-traffic personal use |
+| Redis (Railway) | Included within Railway's free credit | No separate Redis hosting cost |
+| Sentry | 5,000 errors/month, 10,000 performance transactions/month | Sufficient for v1.0 |
+| GitHub Actions | 2,000 CI/CD minutes/month (private repository) | Sufficient for moderate deployment frequency |
+| Google Calendar API | 1,000,000 requests/day | No practical limit for single-user |
+| Twilio WhatsApp Sandbox | Free; recipients must opt-in first | Acceptable for personal use in v1.0 |
+| Gmail SMTP/IMAP | Free with a standard Google account | Standard Gmail rate limits apply |
+| Porcupine (Picovoice) | 1 wake word, up to 3 platforms | Sufficient for v1.0 |
+| Ollama | Fully open-source; no usage limits | Requires adequate user hardware (8 GB RAM minimum) |
+| all-MiniLM-L6-v2 | Free; runs locally after one-time download | No API call or ongoing cost |
+| faster-whisper | Fully open-source; no usage limits | Runs locally |
+| Coqui TTS | Fully open-source; no usage limits | Runs locally |
+| n8n (self-hosted) | Unlimited workflows; no per-execution charges | Hosted on Railway within the free credit |
+| Postman | Unlimited collections, 25 monitors/month, unlimited manual runs | Sufficient for v1.0 development and testing |
+| Prometheus + Grafana | Free; self-hosted on Railway | Consumes a portion of the Railway free credit |
 
----
+### 5.2 Paid Tier Costs at Scale
 
-### 5.2 Estimated Monthly Cost — Single User (v1.0)
+| Service | Paid Trigger | Estimated Monthly Cost |
+|---------|-------------|----------------------|
+| Supabase Pro | Database exceeds 500 MB or storage exceeds 1 GB | $25/month (8 GB DB, 100 GB storage) |
+| Railway (Hobby) | Free credit exhausted (~$5) | $5/month base + ~$0.000463/vCPU-minute used |
+| Vercel Pro | >100 GB bandwidth or team features required | $20/month per user |
+| Sentry Team | >5,000 errors/month | $26/month |
+| Anthropic Claude API | Per token; user-activated paid mode | ~$3–15/month at typical assistant usage (claude-sonnet-4-20250514: $3.00/MTok input, $15.00/MTok output) |
+| OpenAI API | Per token; user-activated paid mode | ~$5–20/month (GPT-4o: $2.50/MTok input, $10.00/MTok output) |
+| OpenAI Whisper API | Per minute of audio | $0.006/minute — approximately $0.50–2.00/month at typical use |
+| ElevenLabs | Per character synthesized | Starter $5/month (30K chars); Creator $22/month (100K chars) |
+| Twilio WhatsApp Business | Per message | ~$0.005/message outbound — negligible at personal use volume |
 
-The following estimates assume a single active user with moderate usage: 20 voice interactions/day, 5 files indexed/day, 3 emails/day, 5 WhatsApp messages/day, 1 morning briefing/day, and 2 automation plans/day.
+### 5.3 Total Monthly Cost by Scenario
 
-#### Claude API Cost Estimate
+| Scenario | Monthly Cost | Description |
+|----------|-------------|-------------|
+| Full free mode (v1.0 launch) | $0 | All free tiers; local AI via Ollama; Twilio sandbox |
+| Free infrastructure + paid AI | $15–35 | Claude API + ElevenLabs + OpenAI Whisper; free hosting tiers |
+| Partial paid infrastructure | $30–60 | Supabase Pro + Railway Hobby + paid AI APIs |
+| Full production (all paid tiers) | $80–120 | All paid tiers across every service |
 
-| Usage Type | Volume/Month | Tokens | Cost |
-|------------|-------------|--------|------|
-| Voice commands (input) | 600 requests | ~1,500 tokens avg (system + context + input) = 900K tokens | $2.70 |
-| Voice commands (output) | 600 requests | ~300 tokens avg = 180K tokens | $2.70 |
-| Prompt cache savings (70% of input) | — | ~630K tokens saved | −$1.89 |
-| Briefings (30/month) | 30 requests | ~3,000 tokens input + 800 output = 114K tokens | $0.66 |
-| Meeting summaries (8/month) | 8 requests | ~5,000 tokens input + 500 output = 44K tokens | $0.22 |
-| Memory consolidation (30/month) | 30 requests | ~2,000 tokens input + 500 output = 75K tokens | $0.38 |
-| **Subtotal Claude** | | | **~$4.77/month** |
-
-#### Other Service Cost Estimates
-
-| Service | Usage/Month | Estimated Cost |
-|---------|------------|----------------|
-| Deepgram | ~300 min (10 min/day) | $1.29 (after $200 free credit is used) |
-| ElevenLabs | ~50,000 chars (briefings + responses) | Free tier (10K/mo) covered partially; Creator plan $22/mo recommended |
-| Google Cloud TTS | < 50,000 chars (fallback only) | Free tier |
-| OpenAI Embeddings | ~500K tokens/month (file changes + new memories) | $0.01 |
-| Supabase | < 200MB DB, < 100MB storage | Free tier |
-| Upstash Redis | ~50,000 commands/day × 30 = 1.5M/month | ~$3.00 |
-| Railway | 2 services (API + worker) always-on | $10.00 |
-| Vercel | Low traffic web dashboard | Free tier |
-| Sentry | < 1,000 errors/month | Free tier |
-| PostHog | < 50,000 events/month | Free tier |
-| WhatsApp | ~150 conversations/month | Free tier (under 1,000/month) |
-
-#### Total Estimated Monthly Cost (Single User)
-
-| Scenario | Monthly Cost |
-|----------|-------------|
-| **Minimal (development/testing)** | ~$15/month |
-| **Regular active use** | ~$40–45/month |
-| **Heavy use (frequent automations, long meetings)** | ~$60–70/month |
-
-The dominant cost driver is ElevenLabs TTS ($22/month for the Creator plan). If cost reduction becomes a priority, switching to Google Cloud TTS (free tier) for all non-briefing responses would reduce the bill by ~$22/month at the expense of voice naturalness.
-
----
-
-### 5.3 Cost at 100-User Scale (v2.0 Reference)
-
-At 100 users, costs scale roughly linearly for API services and step up for infrastructure:
-
-| Category | Single User | 100 Users |
-|----------|------------|-----------|
-| Claude API | ~$5/month | ~$500/month |
-| Deepgram | ~$1.30/month | ~$130/month |
-| ElevenLabs | $22/month | ~$1,200/month (Business plan) |
-| Supabase | Free | Pro $25/month |
-| Railway | $10/month | $40–80/month (more services) |
-| **Total estimate** | **~$40–45/month** | **~$2,000–2,500/month** |
-
-At 100 users, the economics suggest introducing a paid subscription of $25–30/month per user to break even and build margin.
+The most common operating scenario for the target user is expected to be **free infrastructure with selective paid AI**: the user keeps Supabase and Railway on free tiers and activates Claude API and ElevenLabs when they want higher-quality responses and voice output. Estimated cost in this scenario is $15–35/month, consistent with the PRD's cost-conscious user profile.
 
 ---
 
 ## 6.0 Open Questions
 
-| # | Question | Affects | Priority |
-|---|----------|---------|----------|
-| OQ-TS-1 | ElevenLabs `eleven_turbo_v2` supports streaming but the React Native audio player must handle chunked audio playback. Has the `expo-av` player been validated for real-time audio chunk streaming, or is a custom native module required? | F003, F058, latency target | High |
-| OQ-TS-2 | Railway's free tier provides $5 credit/month — this covers approximately 500 hours, which is not enough for 2 always-on services (API + worker). Should both services run on the Hobby plan ($10/month total from day 1), or should the worker be consolidated into the API process for the development phase? | F067, infrastructure cost | High |
-| OQ-TS-3 | Porcupine's free licence covers "personal/non-commercial" use. If Alex is monetised (even a subscription for personal use), does it require a commercial Picovoice licence? This needs legal clarification before launch. | F001, licensing, launch readiness | High |
-| OQ-TS-4 | The monorepo uses pnpm workspaces and Turborepo. Expo (React Native) has historically had compatibility issues with pnpm's strict hoisting. Has this been validated with Expo SDK 52 specifically? | Development setup, CI | Medium |
-| OQ-TS-5 | For the ElevenLabs fallback to Google TTS — should the fallback trigger automatically and silently (user hears a slightly different voice with no warning), or should the user be notified? | F003, UX | Medium |
-| OQ-TS-6 | Supabase's free tier has a 500MB database limit. With pgvector storing 1,536-dimensional float32 embeddings, each vector consumes ~6KB. A 2,000-file index with 5 chunks per file = 10,000 vectors × 6KB = ~60MB just for embeddings, leaving 440MB for all other data. This is sufficient for v1.0 but needs monitoring. When should the Pro tier be activated? | F010, F011, database planning | Medium |
+| # | Question | Owner | Resolution Target |
+|---|----------|-------|-------------------|
+| TS-OQ-1 | Ollama is excluded from the Railway deployment. In free mode, AI inference requires Ollama running on the user's local machine. How does free-mode AI work for users who access Alex through the hosted Vercel/Railway frontend rather than running everything locally? Should the onboarding flow detect whether Ollama is available and guide users accordingly? | Architecture | Before development begins |
+| TS-OQ-2 | Supabase's free tier supports pgvector, but IVFFlat index creation requires specific PostgreSQL grants. Does Supabase's shared free-tier instance allow IVFFlat index creation, or does this require the Supabase Pro plan? | Engineering | Before database provisioning |
+| TS-OQ-3 | n8n defaults to a local SQLite file for workflow and execution history persistence. Railway's filesystem is ephemeral — this data will be lost on redeploy. n8n must be configured to use the Supabase PostgreSQL instance as its backing store. Is this configuration supported on n8n 1.x, and does it require any schema migrations? | Engineering | Before n8n deployment |
+| TS-OQ-4 | The Twilio WhatsApp Sandbox requires recipients to opt in before receiving messages from Alex. Is this acceptable for v1.0, or should the team apply directly for a Twilio WhatsApp Business API account from the start to avoid this limitation for all contacts? | Product | Before Communication Layer development |
+| TS-OQ-5 | Should the onboarding flow include an automated hardware compatibility check that verifies the user's machine meets the 8 GB RAM minimum for Ollama and offers to switch to paid AI mode if the check fails? | Product | Before onboarding flow design (User Flow Document) |
+| TS-OQ-6 | The five-service Railway deployment (API, Celery worker, Celery beat, Redis, n8n) may consume the $5 monthly free credit quickly under continuous use. Should ARQ (a simpler async Redis queue) be evaluated as an alternative to Celery that would consolidate three services into two (API + Redis), reducing compute consumption? | Engineering | Before backend development begins |
 
 ---
 
 ## 7.0 Next Steps
 
-| # | Action | Owner | Dependency |
-|---|--------|-------|-----------|
-| NS-1 | Resolve OQ-TS-3 (Porcupine commercial licence) — legal review required before any launch or monetisation | Product / Legal | Immediately |
-| NS-2 | Validate `expo-av` chunked audio streaming (OQ-TS-1) with a focused proof-of-concept: ElevenLabs stream → React Native audio player | Mobile Engineer | Before F003 build |
-| NS-3 | Confirm pnpm + Expo SDK 52 compatibility in monorepo setup (OQ-TS-4) — create `apps/mobile` scaffold and run `pnpm install` | Engineering | Day 1 of development |
-| NS-4 | Set up all third-party service accounts: Supabase project, Upstash Redis, Railway project, Deepgram API, ElevenLabs API, Meta WhatsApp App, Google Cloud Project (APIs + OAuth), Firebase project, Sentry, PostHog, Axiom | Engineering | Before development begins |
-| NS-5 | Generate Supabase database schema from SYSTEM_DESIGN.md § 7 and run initial migration | Backend Engineer | Week 1 |
-| NS-6 | Create Postman collection with all endpoints from SYSTEM_DESIGN.md § 6 and commit to repository | Backend Engineer | Week 1 |
-| NS-7 | Begin **Security Document** (Document 6) — formalise security posture for OAuth tokens, API keys, user data, and communication content | Engineering + Product | After TECH_STACK sign-off |
+With the Tech Stack Requirements Document complete, the following decisions are locked for all downstream development work.
+
+The backend is Python 3.11 + FastAPI 0.111 + Celery 5 + Redis 7, hosted on Railway. The database is PostgreSQL 16 with pgvector, hosted on Supabase, replacing the SQLite + ChromaDB design from SYSTEM_DESIGN.md. File storage uses Supabase Storage. The frontend is Next.js 14 with shadcn/ui and Tailwind CSS, deployed on Vercel. All services are containerized with Docker and deployed via GitHub Actions. The AI Model Router connects to Ollama (free mode) or Anthropic Claude / OpenAI (paid mode). Monitoring uses Sentry, Prometheus, and Grafana. Workflow automation uses self-hosted n8n on Railway. API testing uses Postman with Newman in CI.
+
+The three remaining documents to be authored are:
+
+1. **Security Document (v1.0)** — credential encryption strategy using Supabase Vault, Supabase Row Level Security configuration, JWT validation in FastAPI, API key management, action permission model, and data retention enforcement.
+2. **User Flow Document (v1.0)** — all major user journeys mapped end-to-end, specifying which API endpoint, which Celery task, and which WebSocket event is involved at each step. The Request → Process → Response cycle from SYSTEM_DESIGN.md Section 5.0 is the structural template for every flow.
+3. **AI Instructions Document (v1.0)** — prompt templates for the Intent Parser, Task Planner, Briefing Composer, Meeting Summarizer, and Smart Suggestions engine. Each template must specify which model it is optimized for (free vs. paid), the expected output schema, and the fallback behavior when the model returns malformed structured output.
+
+Open questions TS-OQ-1 (Ollama in the hosted deployment) and TS-OQ-3 (n8n persistence on Railway) are the most critical blockers and should be resolved before any backend development work begins.
 
 ---
 
-*Technology choices documented here must remain in sync with SYSTEM_DESIGN.md. Any change to a technology after this document is approved must be reflected in both documents and communicated to the team.*
-
----
-
-**Document Control**
-
-| Field | Value |
-|-------|-------|
-| Document Name | TECH_STACK.md |
-| Version | v1.0 |
-| Status | Draft |
-| Created | 24 March 2026 |
-| Last Updated | 24 March 2026 |
-| References | GOAL.md, PRD.md v1.0, SYSTEM_DESIGN.md v1.0, USER_FLOW.md v1.0, FEATURE_LIST.md v1.0 |
+*Document maintained by the Alex Build Team. This document supersedes SYSTEM_DESIGN.md decisions on database technology (SQLite → PostgreSQL via Supabase), vector storage (ChromaDB → pgvector), and real-time transport (SSE → WebSocket). All other SYSTEM_DESIGN.md decisions remain in force. Version history tracked in the project changelog.*

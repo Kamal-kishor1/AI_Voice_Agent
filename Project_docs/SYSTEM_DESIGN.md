@@ -1,33 +1,26 @@
-# System Design Document — Alex: Personal AI Operating System
-**Version:** v1.0  
-**Date:** 24 March 2026  
-**Status:** Draft  
-**References:** GOAL.md, PRD.md v1.0  
-**Author:** Alex Project Team
+# System Design Document
+## Alex — Personal AI Operating System
+**Version:** v1.0
+**Date:** 24 March 2026
+**Status:** Draft
+**Author:** Alex Build Team
+**References:** PRD.md v1.0, GOAL.md
 
 ---
 
 ## Table of Contents
 
-1. [Purpose & Scope](#10-purpose--scope)
-2. [System Overview](#20-system-overview)
-3. [Architecture Pattern](#30-architecture-pattern)
-4. [Component Breakdown](#40-component-breakdown)
-   - 4.1 [Voice Layer](#41-voice-layer)
-   - 4.2 [Intelligence Layer](#42-intelligence-layer-claude-api)
-   - 4.3 [Memory & Database Layer](#43-memory--database-layer)
-   - 4.4 [File & Search Layer](#44-file--search-layer)
-   - 4.5 [Communication Layer](#45-communication-layer)
-   - 4.6 [Automation Engine](#46-automation-engine)
-   - 4.7 [Frontend / Dashboard](#47-frontenddashboard)
-   - 4.8 [Monitoring & Logging](#48-monitoring--logging)
-5. [Data Flow](#50-data-flow)
-6. [API Design](#60-api-design)
-7. [Database Schema](#70-database-schema)
-8. [Integration Points](#80-integration-points)
-9. [Scalability Considerations](#90-scalability-considerations)
-10. [Open Questions](#100-open-questions)
-11. [Next Steps](#110-next-steps)
+1.0 Purpose & Scope
+2.0 System Overview
+3.0 Architecture Pattern
+4.0 Component Breakdown
+5.0 Data Flow
+6.0 API Design
+7.0 Database Schema
+8.0 Integration Points
+9.0 Scalability Considerations
+10.0 Open Questions
+11.0 Next Steps
 
 ---
 
@@ -35,26 +28,35 @@
 
 ### 1.1 Purpose
 
-This System Design Document defines the technical architecture for Alex v1.0. It translates the product requirements from PRD.md into concrete system components, data flows, API contracts, database schemas, and integration patterns.
+This System Design Document defines the technical architecture for Alex v1.0 — a personal AI Operating System. It translates the requirements established in PRD.md into a concrete, buildable system design, specifying components, data flows, API contracts, database schemas, and integration points.
 
-This document is the definitive reference for engineers building Alex and must remain consistent with all other documentation in the series.
+Every architectural decision in this document reflects two foundational constraints carried forward from the PRD: (1) all core functionality must operate fully in free/local mode without any paid API dependency, and (2) paid APIs such as OpenAI and Anthropic Claude are optional performance upgrades, activated exclusively by user choice.
 
-### 1.2 Decisions Inherited from PRD.md
+### 1.2 Scope
 
-The following key decisions from PRD.md are carried into this design:
+This document covers the complete technical design for the following layers:
 
-| Decision | Value |
-|----------|-------|
-| Primary deployment platform | Mobile-first (React Native); web companion |
-| LLM provider | Anthropic Claude (claude-sonnet-4-20250514) |
-| File storage (v1.0) | Google Drive (primary); local filesystem (secondary) |
-| WhatsApp integration | Meta Business API (official) |
-| Memory strategy | Hybrid — cloud DB (primary) + local cache |
-| Interaction languages | English only |
-| User model | Single-user, single-instance |
-| Latency target | ≤ 2 seconds voice-to-response |
-| Transcription mode | Real-time streaming (post-meeting batch as fallback) |
-| Briefing delivery | Auto-push at configurable time + on-demand |
+- Voice processing pipeline (input and output)
+- Intelligence layer supporting both local and paid AI models
+- Memory and database subsystem
+- File indexing and semantic search engine
+- Communication dispatch layer (email and WhatsApp)
+- Automation engine for multi-step task execution
+- Frontend dashboard
+- Monitoring, logging, and observability
+
+### 1.3 PRD Decisions Carried Forward
+
+The following decisions from PRD.md directly shape this architecture:
+
+| PRD Decision | Architectural Implication |
+|-------------|--------------------------|
+| Free mode must be 100% functional | Every component has a free-mode implementation path; no single point of paid-API dependency |
+| Paid APIs are boosters, not replacements | An AI Model Router abstraction decouples the intelligence layer from any specific model provider |
+| Voice-first interaction required | A dedicated Voice Layer runs as an independent process, not a UI widget |
+| Local file system access only in v1.0 | File indexing operates on local directories; no cloud storage connector is required |
+| Single-user system in v1.0 | No multi-tenancy design; all data storage is user-scoped by default |
+| Mode switching must be non-disruptive | The AI Model Router handles hot-switching between model providers at runtime |
 
 ---
 
@@ -62,144 +64,123 @@ The following key decisions from PRD.md are carried into this design:
 
 ### 2.1 High-Level Architecture
 
+Alex is organized as a layered system. User input enters through the Voice or Text Interface, is processed by the Intelligence Layer, and dispatched to one or more Action Modules. Results are returned to the user through the same interface and optionally stored in memory.
+
 ```
-╔══════════════════════════════════════════════════════════════════════════╗
-║                          USER INTERACTION LAYER                          ║
-║                                                                          ║
-║   ┌──────────────┐      ┌──────────────┐      ┌──────────────────────┐  ║
-║   │  Voice Input  │      │  Text Input  │      │  Wake Word Trigger   │  ║
-║   │  (Microphone) │      │  (Chat UI)   │      │  ("Hey Alex")        │  ║
-║   └──────┬───────┘      └──────┬───────┘      └──────────┬───────────┘  ║
-╚══════════╪═════════════════════╪══════════════════════════╪══════════════╝
-           │                     │                          │
-           ▼                     ▼                          ▼
-╔══════════════════════════════════════════════════════════════════════════╗
-║                            VOICE LAYER                                   ║
-║                                                                          ║
-║   ┌─────────────────────┐        ┌──────────────────────────────────┐   ║
-║   │  STT Engine         │        │  TTS Engine                      │   ║
-║   │  (Deepgram / Whisper│        │  (ElevenLabs / Google TTS)       │   ║
-║   │   streaming)        │        │                                  │   ║
-║   └──────────┬──────────┘        └──────────────────────────────────┘   ║
-╚══════════════╪═══════════════════════════════════════════════════════════╝
-               │  Transcribed text
-               ▼
-╔══════════════════════════════════════════════════════════════════════════╗
-║                         INTELLIGENCE LAYER                               ║
-║                                                                          ║
-║  ┌────────────────────────────────────────────────────────────────────┐ ║
-║  │                      ALEX CORE ENGINE                              │ ║
-║  │                                                                    │ ║
-║  │  ┌──────────────┐  ┌──────────────┐  ┌───────────────────────┐   │ ║
-║  │  │ Intent Parser │  │ Planner      │  │ Response Generator    │   │ ║
-║  │  │ (Claude API) │  │ (multi-step) │  │ (Claude API + stream) │   │ ║
-║  │  └──────┬───────┘  └──────┬───────┘  └───────────────────────┘   │ ║
-║  │         │                 │                                        │ ║
-║  │  ┌──────▼─────────────────▼──────────────────────────────────┐    │ ║
-║  │  │                    TOOL ROUTER                             │    │ ║
-║  │  │  Routes to: Files | Email | WhatsApp | Calendar | Tasks   │    │ ║
-║  │  └────────────────────────────────────────────────────────────┘    │ ║
-║  └────────────────────────────────────────────────────────────────────┘ ║
-╚══════════════════════════════════════════════════════════════════════════╝
-               │
-     ┌─────────┼──────────────────────────────────────┐
-     │         │                                      │
-     ▼         ▼                                      ▼
-╔═════════╗ ╔═════════════════════════╗  ╔════════════════════════════════╗
-║ MEMORY  ║ ║  FILE & SEARCH LAYER    ║  ║   COMMUNICATION LAYER          ║
-║ LAYER   ║ ║                         ║  ║                                ║
-║         ║ ║  ┌──────────────────┐   ║  ║  ┌────────────┐  ┌──────────┐ ║
-║ Supabase║ ║  │ Google Drive API │   ║  ║  │ Gmail API  │  │WhatsApp  │ ║
-║ (Postgres║ ║  │ + Embeddings     │   ║  ║  │            │  │Business  │ ║
-║ + pgvec-║ ║  │ (Pinecone/pgvec) │   ║  ║  └────────────┘  │API       │ ║
-║ tor)    ║ ║  └──────────────────┘   ║  ║                   └──────────┘ ║
-╚═════════╝ ╚═════════════════════════╝  ╚════════════════════════════════╝
-               │
-     ┌─────────┼─────────────┐
-     ▼         ▼             ▼
-╔═════════════════════════════════════════════════════════╗
-║              AUTOMATION ENGINE                          ║
-║                                                         ║
-║  ┌───────────────┐  ┌──────────────┐  ┌─────────────┐  ║
-║  │ Task Scheduler │  │ Step Runner  │  │ Error Retry │  ║
-║  │ (node-cron)   │  │ (sequential) │  │ Handler     │  ║
-║  └───────────────┘  └──────────────┘  └─────────────┘  ║
-╚═════════════════════════════════════════════════════════╝
-               │
-               ▼
-╔═════════════════════════════════════════════════════════╗
-║           FRONTEND / DASHBOARD                          ║
-║                                                         ║
-║  ┌─────────────────────┐   ┌──────────────────────────┐ ║
-║  │ React Native App    │   │ Web Dashboard (Next.js)  │ ║
-║  │ (Mobile-first)      │   │ (secondary)              │ ║
-║  └─────────────────────┘   └──────────────────────────┘ ║
-╚═════════════════════════════════════════════════════════╝
-               │
-               ▼
-╔═════════════════════════════════════════════════════════╗
-║           MONITORING & LOGGING                          ║
-║                                                         ║
-║  ┌──────────────┐  ┌────────────────┐  ┌────────────┐  ║
-║  │ Sentry       │  │ PostHog        │  │ Logtail /  │  ║
-║  │ (errors)     │  │ (analytics)    │  │ Axiom      │  ║
-║  └──────────────┘  └────────────────┘  └────────────┘  ║
-╚═════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════════════╗
+║                         USER INTERFACE LAYER                         ║
+║   ┌─────────────────────────┐     ┌──────────────────────────────┐   ║
+║   │     Voice Interface      │     │     Web Dashboard (UI)       │   ║
+║   │  (Mic Input / TTS Output)│     │  (Chat, Tasks, Settings)     │   ║
+║   └────────────┬────────────┘     └──────────────┬───────────────┘   ║
+╚════════════════╪══════════════════════════════════╪═══════════════════╝
+                 │                                  │
+╔════════════════╪══════════════════════════════════╪═══════════════════╗
+║                │         VOICE LAYER              │                    ║
+║   ┌────────────▼────────────┐                     │                   ║
+║   │   Wake Word Detection   │                     │                   ║
+║   │   (Porcupine / Picovoice│                     │                   ║
+║   │    — offline capable)   │                     │                   ║
+║   └────────────┬────────────┘                     │                   ║
+║   ┌────────────▼────────────┐                     │                   ║
+║   │  Speech-to-Text (STT)   │                     │                   ║
+║   │  FREE:  Whisper (local) │                     │                   ║
+║   │  PAID:  OpenAI Whisper  │                     │                   ║
+║   └────────────┬────────────┘                     │                   ║
+║   ┌────────────▼────────────┐                     │                   ║
+║   │  Text-to-Speech (TTS)   │                     │                   ║
+║   │  FREE:  Coqui TTS       │                     │                   ║
+║   │  PAID:  ElevenLabs      │                     │                   ║
+║   └────────────┬────────────┘                     │                   ║
+╚════════════════╪═════════════════════════════════╪════════════════════╝
+                 │                                 │
+╔════════════════╪═════════════════════════════════╪════════════════════╗
+║                │      INTELLIGENCE LAYER         │                    ║
+║   ┌────────────▼─────────────────────────────────▼──────────────┐    ║
+║   │                     Intent Parser                            │    ║
+║   │          (Extracts intent, entities, action steps)           │    ║
+║   └──────────────────────────┬──────────────────────────────────┘    ║
+║   ┌──────────────────────────▼──────────────────────────────────┐    ║
+║   │                   AI Model Router                            │    ║
+║   │   FREE MODE:  Ollama → Mistral 7B / LLaMA 3.1 8B            │    ║
+║   │   PAID MODE:  Anthropic Claude API / OpenAI GPT-4o           │    ║
+║   │   (Hot-switchable; user-controlled; no restart required)     │    ║
+║   └──────────────────────────┬──────────────────────────────────┘    ║
+║   ┌──────────────────────────▼──────────────────────────────────┐    ║
+║   │                   Task Planner                               │    ║
+║   │   (Decomposes multi-step commands into ordered action steps) │    ║
+║   └──────────────────────────┬──────────────────────────────────┘    ║
+╚════════════════════════════════╪═══════════════════════════════════════╝
+                                 │
+╔════════════════════════════════╪═══════════════════════════════════════╗
+║              ACTION LAYER      │                                        ║
+║  ┌──────────┐ ┌─────────┐ ┌───▼──────┐ ┌──────────┐ ┌─────────────┐  ║
+║  │  File    │ │  Comms  │ │Automation│ │ Calendar │ │   Meeting   │  ║
+║  │  Search  │ │ Engine  │ │  Engine  │ │ Manager  │ │   Copilot   │  ║
+║  │  Engine  │ │(Email + │ │(Multi-   │ │(Google   │ │ (Whisper +  │  ║
+║  │(Whoosh + │ │WhatsApp)│ │step exec)│ │Calendar) │ │  Summary)   │  ║
+║  │ Sentence │ │         │ │          │ │          │ │             │  ║
+║  │Transformr│ │         │ │          │ │          │ │             │  ║
+║  └──────────┘ └─────────┘ └──────────┘ └──────────┘ └─────────────┘  ║
+╚════════════════════════════════════════════════════════════════════════╝
+                                 │
+╔════════════════════════════════╪═══════════════════════════════════════╗
+║             MEMORY & DATA LAYER│                                        ║
+║  ┌───────────────┐  ┌──────────▼──────────┐  ┌─────────────────────┐  ║
+║  │  SQLite DB    │  │  Vector Store        │  │   File Index        │  ║
+║  │  (Tasks,      │  │  (ChromaDB — local)  │  │   (Whoosh —         │  ║
+║  │  Contacts,    │  │  (Semantic memory,   │  │    local)           │  ║
+║  │  Prefs,       │  │   embeddings,        │  │                     │  ║
+║  │  Reminders,   │  │   conversation ctx)  │  │                     │  ║
+║  │  Logs)        │  │                      │  │                     │  ║
+║  └───────────────┘  └──────────────────────┘  └─────────────────────┘  ║
+╚═════════════════════════════════════════════════════════════════════════╝
+                                 │
+╔════════════════════════════════╪═══════════════════════════════════════╗
+║         EXTERNAL INTEGRATIONS  │                                        ║
+║  ┌──────────┐ ┌────────────┐ ┌─▼──────────┐ ┌────────────────────┐   ║
+║  │  Gmail   │ │  WhatsApp  │ │  Google    │ │  Anthropic /       │   ║
+║  │  SMTP /  │ │  Business  │ │  Calendar  │ │  OpenAI API        │   ║
+║  │  IMAP    │ │  API /     │ │  API       │ │  (Paid Mode Only)  │   ║
+║  │          │ │  Twilio    │ │            │ │                    │   ║
+║  └──────────┘ └────────────┘ └────────────┘ └────────────────────┘   ║
+╚════════════════════════════════════════════════════════════════════════╝
 ```
 
 ### 2.2 Component Connectivity Summary
 
-```
-User ──► Voice Layer ──► Intelligence Layer ──► Tool Router
-                                │                    │
-                         Memory Layer         ┌──────┴────────┐
-                         (context inject)     │               │
-                                         File Layer    Comm Layer
-                                              │               │
-                                         Automation Engine ───┘
-                                              │
-                                         Frontend (display/notify)
-                                              │
-                                         Monitoring (observe all)
-```
+All components communicate through a central **Internal API Bus** running on localhost. The Voice Layer converts audio to text and passes it to the Intelligence Layer as a plain text string. The Intelligence Layer routes through the AI Model Router, produces an intent object and action plan, and dispatches steps to the appropriate Action Modules. Each Action Module writes results back to the Memory Layer and returns a response string to the Voice or Text interface. The Frontend Dashboard reads state directly from the SQLite database and subscribes to Server-Sent Events for real-time updates.
 
 ---
 
 ## 3.0 Architecture Pattern
 
-### 3.1 Chosen Pattern: Modular Monolith → Microservices-Ready
+### 3.1 Selected Pattern: Modular Monolith with Service Boundaries
 
-**Decision:** Alex v1.0 is built as a **modular monolith** with clearly bounded internal modules. Each module is independently testable and has a well-defined interface. The architecture is designed to split into microservices in v2.0 without a rewrite.
+Alex v1.0 is built as a **modular monolith** — a single deployable process composed of clearly separated internal modules, each with defined interfaces and responsibilities.
 
-### 3.2 Rationale
+This pattern was selected over a full microservices architecture for the following reasons:
 
-| Factor | Monolith Advantage | Microservices Risk (v1.0) |
-|--------|-------------------|--------------------------|
-| Team size | Small team moves faster in a monolith | Microservice orchestration overhead too high |
-| Latency | In-process calls = sub-millisecond | Network hops add latency; violates ≤2s target |
-| Debugging | Single log stream, simpler tracing | Distributed tracing requires extra tooling |
-| Deployment | One deployment unit | Multiple services to manage, monitor, deploy |
-| Single user | No concurrency pressure | Microservices shine at scale; overkill here |
+**Simplicity of local deployment.** Alex must run on a single user's machine without requiring container orchestration, service mesh configuration, or inter-process networking. A monolith with module boundaries achieves the same separation of concerns without that operational overhead.
 
-### 3.3 Module Boundaries (enforced in code)
+**Performance for single-user workloads.** Inter-process communication via HTTP adds latency that is unnecessary when all services are serving a single concurrent user. In-process function calls are dramatically faster for the voice response latency target of under two seconds.
+
+**Upgrade path preserved.** The modular design ensures that any individual module — particularly the AI Model Router and the Communication Engine — can be extracted into a standalone service in v1.1 without disrupting the rest of the system.
+
+**Hybrid AI constraint compatibility.** The AI Model Router runs as an in-process abstraction that can call either a local Ollama endpoint or a remote Claude/OpenAI API without requiring an architecture change.
+
+### 3.2 Runtime Process Model
 
 ```
-alex-core/
-├── voice/          # STT, TTS, wake word
-├── intelligence/   # Claude integration, intent, planner
-├── memory/         # DB reads/writes, preference engine
-├── files/          # Search, indexing, retrieval
-├── communication/  # Email, WhatsApp adapters
-├── automation/     # Task scheduler, step runner
-├── api/            # REST API layer (Express.js)
-└── dashboard/      # Frontend (separate repo, React Native + Next.js)
+alex-core (main process)
+  ├── voice_listener        (background thread — mic capture + STT)
+  ├── wake_word_detector    (background thread — always on, low CPU)
+  ├── api_server            (FastAPI — localhost:8000)
+  ├── scheduler             (APScheduler — reminders, briefings, indexing)
+  └── file_watcher          (Watchdog — real-time file index updates)
 ```
 
-### 3.4 Communication Between Modules
-
-- **Synchronous:** Direct function calls within the monolith process
-- **Asynchronous:** BullMQ job queue (Redis-backed) for long-running tasks (transcription, multi-step automation, briefing generation)
-- **Events:** Internal EventEmitter for non-blocking side effects (e.g., log after action, update memory after conversation)
+The API server is the internal bus. All modules — including the dashboard frontend — communicate exclusively through it. No module holds a direct reference to another module's internal state.
 
 ---
 
@@ -207,970 +188,819 @@ alex-core/
 
 ### 4.1 Voice Layer
 
-**Responsibility:** Convert audio to text (STT), text to audio (TTS), and detect the wake word ("Hey Alex").
+The Voice Layer is Alex's primary I/O interface. It operates as two independent background threads — one for capture and transcription, one for synthesis — managed by the main process.
 
-#### 4.1.1 Speech-to-Text (STT)
+**Wake Word Detection**
 
-| Attribute | Value |
-|-----------|-------|
-| **Primary Provider** | Deepgram (Nova-3 model) |
-| **Fallback** | OpenAI Whisper (self-hosted or API) |
-| **Mode** | Streaming (real-time transcription) |
-| **Language** | English (en-US) |
-| **Latency Target** | First token in ≤ 300ms |
-| **Format** | WebSocket stream → transcribed text chunks |
+| Attribute | Detail |
+|-----------|--------|
+| Library | Porcupine by Picovoice (free tier) |
+| Mode | Always-on, offline, < 5% CPU |
+| Trigger | Custom wake word "Hey Alex" |
+| Fallback | OpenWakeWord (fully open-source alternative) |
+| Output | Binary trigger signal → activates STT listener |
+
+**Speech-to-Text (STT)**
+
+| Attribute | Free Mode | Paid Mode |
+|-----------|-----------|-----------|
+| Library | OpenAI Whisper (local, `whisper-base` or `whisper-small`) | OpenAI Whisper API |
+| Runtime | Python `faster-whisper` for CPU-optimized inference | REST call to OpenAI endpoint |
+| Latency | 1–3 seconds for short commands | ~0.5 seconds |
+| Language | English (v1.0) | English (v1.0) |
+| Output | Plain text transcription |
+
+**Text-to-Speech (TTS)**
+
+| Attribute | Free Mode | Paid Mode |
+|-----------|-----------|-----------|
+| Library | Coqui TTS (VITS model, local) | ElevenLabs API |
+| Voice quality | Natural; slightly robotic | Near-human |
+| Latency | ~1 second | ~0.3 seconds |
+| Output | WAV audio stream → speakers |
+
+**Voice Layer API Contract**
+
+The Voice Layer exposes two internal events on the event bus:
 
 ```
-Audio stream
-    │
-    ▼
-┌──────────────────────┐
-│  Deepgram WebSocket  │  ──► Partial transcripts (live)
-│  (Nova-3 streaming)  │  ──► Final transcript (on silence detection)
-└──────────────────────┘
-    │
-    ▼
-Text passed to Intelligence Layer
+EVENT: voice.transcription_ready
+PAYLOAD: { text: string, timestamp: ISO8601, confidence: float }
+
+EVENT: voice.tts_requested
+PAYLOAD: { text: string, priority: "normal" | "urgent" }
 ```
-
-#### 4.1.2 Text-to-Speech (TTS)
-
-| Attribute | Value |
-|-----------|-------|
-| **Primary Provider** | ElevenLabs (custom Alex voice) |
-| **Fallback** | Google Cloud TTS (WaveNet) |
-| **Streaming** | Yes — audio chunks streamed as text is generated |
-| **Latency Target** | First audio chunk in ≤ 400ms |
-| **Voice Character** | Calm, clear, professional |
-
-#### 4.1.3 Wake Word Detection
-
-| Attribute | Value |
-|-----------|-------|
-| **Trigger Phrase** | "Hey Alex" |
-| **Engine** | Porcupine (on-device, by Picovoice) |
-| **Processing** | 100% on-device — no audio sent to cloud until activated |
-| **Platform** | React Native (iOS + Android SDK) |
-| **Power Mode** | Always-on low-power mode |
 
 ---
 
-### 4.2 Intelligence Layer (Claude API)
+### 4.2 Intelligence Layer
 
-**Responsibility:** Understand intent, plan multi-step actions, generate responses, and decide which tools to invoke.
+The Intelligence Layer is the cognitive core of Alex. It receives text input from either the Voice Layer or the text chat interface, resolves intent, plans multi-step actions, and dispatches those actions to the appropriate modules.
 
-#### 4.2.1 Core Engine Design
+**4.2.1 Intent Parser**
 
-```
-Input Text
-    │
-    ▼
-┌────────────────────────────────────────────────────────────┐
-│                    ALEX CORE ENGINE                         │
-│                                                             │
-│  Step 1: Context Assembly                                   │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ System Prompt + User Profile + Conversation History │   │
-│  │ + Recent Memory + Current Date/Time                 │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                         │                                   │
-│  Step 2: Claude API Call (with tools)                       │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ claude-sonnet-4-20250514                            │   │
-│  │ Tools: search_files, send_email, send_whatsapp,     │   │
-│  │        create_task, book_meeting, get_calendar,     │   │
-│  │        get_memory, set_memory, run_automation       │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                         │                                   │
-│  Step 3: Tool Router + Executor                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ Parse tool_use blocks → Execute → Return results    │   │
-│  │ Loop until final text response                      │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                         │                                   │
-│  Step 4: Response Streaming                                 │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ Stream text → TTS → Audio output                   │   │
-│  └─────────────────────────────────────────────────────┘   │
-└────────────────────────────────────────────────────────────┘
-```
-
-#### 4.2.2 Claude API Configuration
-
-| Parameter | Value |
-|-----------|-------|
-| Model | `claude-sonnet-4-20250514` |
-| Max tokens | 4096 (response) |
-| Temperature | 0.3 (for task execution); 0.7 (for conversational) |
-| Streaming | Enabled (server-sent events) |
-| Context window management | Sliding window — last 20 turns; summarize older turns |
-| Prompt caching | Enabled on system prompt (static) |
-| Tool choice | `auto` (Claude decides when to use tools) |
-
-#### 4.2.3 Tool Definitions (Claude function-calling schema)
-
-```json
-[
-  { "name": "search_files",      "description": "Search user's files semantically" },
-  { "name": "send_email",        "description": "Draft and send an email" },
-  { "name": "send_whatsapp",     "description": "Send a WhatsApp message" },
-  { "name": "get_calendar",      "description": "Fetch calendar events and free slots" },
-  { "name": "create_event",      "description": "Book a calendar event" },
-  { "name": "create_task",       "description": "Create a task or reminder" },
-  { "name": "get_tasks",         "description": "Retrieve pending tasks" },
-  { "name": "get_memory",        "description": "Retrieve stored user preferences" },
-  { "name": "set_memory",        "description": "Store a new preference or fact" },
-  { "name": "transcribe_meeting","description": "Start or stop meeting transcription" },
-  { "name": "get_briefing",      "description": "Generate the morning briefing" },
-  { "name": "run_automation",    "description": "Trigger a multi-step automation plan" }
-]
-```
-
-#### 4.2.4 System Prompt Architecture
-
-The system prompt is structured in layers:
+The Intent Parser is responsible for transforming raw user text into a structured intent object. It uses the AI Model Router to perform this classification.
 
 ```
-[LAYER 1 - STATIC — CACHED]
-Alex identity, personality, operating rules, tool descriptions
+Input:  "Find the Q1 report and email it to Priya"
 
-[LAYER 2 - SEMI-STATIC — REFRESHED DAILY]
-User profile: name, preferences, working hours, tone settings,
-top contacts, current projects
-
-[LAYER 3 - DYNAMIC — PER REQUEST]
-Current date/time, recent conversation history (last 10 turns),
-active tasks, today's calendar, any triggered context
+Output (Intent Object):
+{
+  "intent": "multi_step_task",
+  "steps": [
+    { "action": "file_search",   "query": "Q1 report" },
+    { "action": "send_email",    "recipient": "Priya", "attach": "{{step_1_result}}" }
+  ],
+  "entities": {
+    "contacts": ["Priya"],
+    "files":    ["Q1 report"]
+  },
+  "requires_confirmation": true,
+  "ambiguity_score": 0.12
+}
 ```
+
+If `ambiguity_score` exceeds 0.4, the system generates a single clarifying question rather than proceeding. It never refuses an ambiguous command — it always asks one question and continues.
+
+**4.2.2 AI Model Router**
+
+The AI Model Router is the abstraction layer that decouples all other components from any specific AI provider. It is the only component in Alex that is aware of which model is active.
+
+```
+┌─────────────────────────────────────────┐
+│            AI Model Router              │
+│                                         │
+│   config.ai_mode = "free" | "paid"      │
+│                                         │
+│   if free:                              │
+│     → POST http://localhost:11434/api   │  (Ollama)
+│       model: mistral:7b                 │
+│       or:    llama3.1:8b                │
+│                                         │
+│   if paid:                              │
+│     → POST api.anthropic.com/v1/messages│  (Claude)
+│       or: api.openai.com/v1/chat        │  (GPT-4o)
+│                                         │
+│   Interface is identical to callers.    │
+│   Hot-switching: config change only.    │
+│   No restart required.                  │
+└─────────────────────────────────────────┘
+```
+
+**Model Selections**
+
+| Mode | Primary Model | Fallback Model | Use Case |
+|------|--------------|----------------|----------|
+| Free | Mistral 7B (via Ollama) | LLaMA 3.1 8B (via Ollama) | Intent parsing, summarization, generation |
+| Paid | Claude claude-sonnet-4-20250514 (Anthropic) | GPT-4o (OpenAI) | Enhanced reasoning, complex multi-step tasks |
+
+**4.2.3 Task Planner**
+
+The Task Planner converts the Intent Parser's output into an ordered execution plan. It handles dependency resolution — ensuring, for example, that a file search completes before an email send that attaches the result.
+
+```
+Execution Plan (internal format):
+{
+  "plan_id": "uuid",
+  "steps": [
+    { "step_id": 1, "action": "file_search",  "params": {...}, "depends_on": [] },
+    { "step_id": 2, "action": "send_email",   "params": {...}, "depends_on": [1] }
+  ],
+  "confirmation_required": true,
+  "created_at": "ISO8601"
+}
+```
+
+If `confirmation_required` is true, the Task Planner serializes the plan as a human-readable preview and returns it to the user for approval before any action is executed.
 
 ---
 
 ### 4.3 Memory & Database Layer
 
-**Responsibility:** Persist all user data, conversation history, preferences, embeddings, and task state.
+Alex uses a two-store memory architecture: a relational store (SQLite) for structured data and a vector store (ChromaDB) for semantic memory and conversation context.
 
-#### 4.3.1 Database Stack
+**SQLite** is the source of truth for all structured, queryable data — tasks, contacts, reminders, calendar events, preferences, and audit logs. It requires no server and runs entirely in-process.
 
-| Store | Technology | Purpose |
-|-------|-----------|---------|
-| **Primary DB** | Supabase (PostgreSQL) | Structured data: tasks, events, contacts, logs |
-| **Vector Store** | pgvector (in Supabase) | Semantic search embeddings for files and memory |
-| **Cache** | Redis (Upstash) | Session state, conversation context, rate limiting |
-| **Local Cache** | SQLite (on-device) | Offline preferences; syncs to Supabase on reconnect |
+**ChromaDB** is the local vector database for semantic memory. It stores embeddings of past conversations, user preferences expressed in natural language, and frequently accessed file metadata. This enables Alex to recall context from previous sessions without exact keyword matching.
 
-#### 4.3.2 Memory Types
-
-```
-MEMORY SYSTEM
-├── Short-term Memory  →  Redis (conversation context, expires in 24h)
-├── Long-term Memory   →  Supabase (preferences, learned facts, never expires)
-├── Episodic Memory    →  Supabase (past interactions, summaries, timestamped)
-└── Semantic Memory    →  pgvector (embeddings for files, conversations, notes)
-```
-
-#### 4.3.3 Embedding Strategy
-
-- **Model:** `text-embedding-3-small` (OpenAI) or `voyage-3` (Anthropic)
-- **What gets embedded:** File metadata + preview, conversation summaries, task descriptions, contact interaction summaries
-- **When:** On write (background job via BullMQ)
-- **Retrieval:** cosine similarity, top-k = 5
+Both stores reside on the local file system and are never transmitted externally. Full schema is defined in Section 7.0.
 
 ---
 
 ### 4.4 File & Search Layer
 
-**Responsibility:** Index, search, and retrieve user files from connected storage.
+The File & Search Layer provides intelligent retrieval of local files. It operates in two complementary modes.
 
-#### 4.4.1 Architecture
+**Keyword Search (Whoosh)**
+
+Whoosh is a pure-Python full-text search library that indexes file metadata — name, path, extension, creation date, and modification date. It supports case-insensitive queries, wildcard matching, and Boolean operators. The index is persisted to disk and updated in real time by a Watchdog file watcher.
+
+**Semantic Search (Sentence Transformers + ChromaDB)**
+
+For queries where the user does not know the filename, semantic search uses the `all-MiniLM-L6-v2` model from Sentence Transformers to embed the query and retrieve the most semantically similar files by content summary. File content is extracted at index time using Apache Tika (for documents) and stored as embeddings in ChromaDB.
+
+**Search Flow**
 
 ```
-Google Drive API
-      │
-      ▼
-┌─────────────────────────┐
-│   File Indexer Service  │  (runs on schedule + on-demand)
-│                         │
-│  1. Fetch file metadata │
-│  2. Extract text content│  (PDF, DOCX, Sheets via parsers)
-│  3. Chunk content       │  (512 token chunks with overlap)
-│  4. Generate embeddings │  (text-embedding-3-small)
-│  5. Store in pgvector   │
-└─────────────────────────┘
-      │
-      ▼
-┌─────────────────────────┐
-│   Search Engine         │
-│                         │
-│  Query → embed query    │
-│  → vector similarity    │
-│  → rank by recency +    │
-│    similarity score     │
-│  → return top 3 results │
-└─────────────────────────┘
+User query: "the contract I sent to Priya in February"
+     │
+     ▼
+Keyword search (Whoosh) → candidate files by name/date
+     │
+     ▼
+Semantic re-rank (ChromaDB) → top 3 candidates by relevance
+     │
+     ▼
+If score > 0.85 → auto-select and proceed
+If score < 0.85 → present top 3 to user for selection
 ```
 
-#### 4.4.2 File Indexing Schedule
+**File Watcher**
 
-| Trigger | Action |
-|---------|--------|
-| On app start | Full index sync (delta only) |
-| Every 15 minutes | Check for new/modified files |
-| After file send/receive action | Immediate re-index of that file |
-| On user command ("reindex my files") | Force full re-index |
-
-#### 4.4.3 Supported File Types (v1.0)
-
-| Format | Parser |
-|--------|--------|
-| PDF | pdf-parse (Node.js) |
-| DOCX | mammoth.js |
-| XLSX | SheetJS |
-| Google Docs | Google Docs export API |
-| Google Sheets | Google Sheets API |
-| TXT / MD | Native string |
-| Images | Out of scope (v1.0) |
+The Watchdog library monitors the user-configured watched directories. On any file creation, modification, or deletion event, it triggers an incremental index update within two seconds. No manual re-indexing is required.
 
 ---
 
 ### 4.5 Communication Layer
 
-**Responsibility:** Send and receive emails and WhatsApp messages on behalf of the user.
+The Communication Layer dispatches outbound messages across two channels: email and WhatsApp.
 
-#### 4.5.1 Email (Gmail)
+**Email**
 
-```
-Alex Intelligence Layer
-        │
-        ▼ (send_email tool called)
-┌────────────────────────────────────┐
-│         Email Adapter              │
-│                                    │
-│  1. Resolve contact → email addr   │
-│  2. Draft subject + body (Claude)  │
-│  3. Apply tone preferences         │
-│  4. Attach file (if requested)     │
-│  5. Preview (if first time contact)│
-│  6. Send via Gmail API             │
-│  7. Log in sent_messages table     │
-└────────────────────────────────────┘
-```
+| Attribute | Detail |
+|-----------|--------|
+| Outbound | SMTP via `smtplib` (Python standard library) |
+| Inbound (read) | IMAP via `imaplib` |
+| Default provider | Gmail (configurable to any SMTP/IMAP provider) |
+| Attachment handling | Files resolved by the File Search Layer and attached via MIME |
+| Credential storage | Encrypted in SQLite using the local encryption key (see Security Document) |
+| Contact resolution | `contacts` table in SQLite; fuzzy match on name or alias |
 
-| Attribute | Value |
-|-----------|-------|
-| Provider | Gmail API (Google OAuth 2.0) |
-| Auth | OAuth 2.0 with refresh token stored in Supabase (encrypted) |
-| Draft mode | Enabled by default for new contacts; skippable |
-| Rate limit | Gmail: 250 quota units/second |
-| File attach | Google Drive link or inline attachment (< 25MB) |
+**WhatsApp**
 
-#### 4.5.2 WhatsApp
+| Attribute | Free Mode | Paid Mode |
+|-----------|-----------|-----------|
+| Integration | Twilio WhatsApp Sandbox (free tier) | Twilio WhatsApp Business API (paid) |
+| Fallback | `whatsapp-web.js` bridge (unofficial; requires Chrome) | — |
+| Attachment | Files encoded as media messages | Same |
+| Latency | 2–5 seconds | 1–2 seconds |
+
+> **Note on WhatsApp:** The free Twilio sandbox is suitable for development and personal use. For production reliability, the paid Twilio Business API is recommended but not required. The `whatsapp-web.js` bridge provides a zero-cost alternative but depends on the user maintaining an active WhatsApp Web session.
+
+**Contact Resolution Flow**
 
 ```
-Alex Intelligence Layer
-        │
-        ▼ (send_whatsapp tool called)
-┌────────────────────────────────────┐
-│       WhatsApp Adapter             │
-│                                    │
-│  1. Resolve contact → phone number │
-│  2. Select message template or     │
-│     freeform (based on 24h window) │
-│  3. Attach media (if file)         │
-│  4. Send via Meta Business API     │
-│  5. Log in sent_messages table     │
-└────────────────────────────────────┘
-```
-
-| Attribute | Value |
-|-----------|-------|
-| Provider | Meta WhatsApp Business API (Cloud API) |
-| Auth | Permanent access token (Meta App) |
-| Message types | Text, document, image |
-| Template requirement | Required for messages outside 24h window |
-| Webhook | Meta webhook → Alex server → update message status |
-
-#### 4.5.3 Contact Resolution Engine
-
-```
-Input: "Priya"
-    │
-    ▼
-┌──────────────────────────────────────────────┐
-│  1. Exact match in contacts table            │
-│  2. Fuzzy match (Levenshtein distance ≤ 2)  │
-│  3. Context match (last discussed contact)   │
-│  4. If still ambiguous → ask clarification   │
-└──────────────────────────────────────────────┘
+User says: "Send it to Priya"
+     │
+     ▼
+Fuzzy match "Priya" against contacts.display_name and contacts.aliases
+     │
+     ├── Single match (confidence > 0.9) → proceed automatically
+     ├── Multiple matches → ask: "Did you mean Priya Sharma or Priya Nair?"
+     └── No match → ask: "I don't have Priya's contact. What's her email?"
 ```
 
 ---
 
 ### 4.6 Automation Engine
 
-**Responsibility:** Execute multi-step tasks sequentially, handle dependencies, manage retries, and surface results.
+The Automation Engine is responsible for executing the Task Planner's multi-step execution plans. It runs each step in sequence, passes outputs from one step as inputs to the next, handles errors at each step, and reports the final result.
 
-#### 4.6.1 Architecture
+**Execution Model**
 
-```
-Intelligence Layer creates an Automation Plan:
-{
-  "plan_id": "plan_abc123",
-  "steps": [
-    { "id": 1, "tool": "search_files",  "params": {"query": "Q3 report"} },
-    { "id": 2, "tool": "send_email",    "params": {"to": "arjun", "attach": "$step1.result"}, "depends_on": [1] },
-    { "id": 3, "tool": "create_task",   "params": {"title": "Follow up with Arjun"}, "depends_on": [2] }
-  ]
-}
-        │
-        ▼
-┌──────────────────────────────────────────────────┐
-│                  Step Runner                      │
-│                                                  │
-│  For each step (in dependency order):            │
-│  1. Resolve parameter references ($step.result)  │
-│  2. Execute tool                                 │
-│  3. On success → store result, proceed           │
-│  4. On failure → retry (max 3) → surface error  │
-│  5. On completion → notify user                 │
-└──────────────────────────────────────────────────┘
+```python
+class AutomationEngine:
+    def execute(self, plan: ExecutionPlan) -> ExecutionResult:
+        context = {}
+        for step in plan.steps:
+            if not all(dep in context for dep in step.depends_on):
+                raise DependencyError(step)
+            try:
+                result = self.dispatch(step, context)
+                context[step.step_id] = result
+            except ActionError as e:
+                return ExecutionResult(
+                    status="partial_failure",
+                    completed_steps=list(context.keys()),
+                    failed_step=step.step_id,
+                    error=str(e)
+                )
+        return ExecutionResult(status="success", context=context)
 ```
 
-#### 4.6.2 Scheduled Jobs (via node-cron + BullMQ)
+**Error Handling Policy**
 
-| Job | Schedule | Description |
-|-----|----------|-------------|
-| Morning Briefing | 07:00 AM (configurable) | Generate and push daily briefing |
-| Pre-meeting prep | 10 min before event | Surface relevant files + context |
-| Follow-up suggestions | 30 min after meeting end | Suggest follow-up email |
-| File re-index | Every 15 min | Sync new/modified files |
-| Memory consolidation | 11:00 PM daily | Summarize day's interactions to long-term memory |
-| Overdue task check | Every hour | Flag and notify overdue tasks |
+On step failure, the Automation Engine does not attempt to guess or retry automatically. It reports exactly which steps succeeded, which failed, and why — then waits for user instruction before attempting any recovery. This ensures the user maintains full control over consequential actions.
 
-#### 4.6.3 Error Handling Strategy
+**Confirmation Gate**
 
-```
-Step fails
-    │
-    ├─► Retry (max 3 attempts, exponential backoff)
-    │
-    ├─► On 3rd failure: mark step as failed
-    │
-    ├─► Continue independent steps if no dependency
-    │
-    └─► Notify user:
-        "I couldn't complete step 2 (send email). 
-         The file was found. Want me to retry?"
-```
+All plans with `confirmation_required: true` are paused before execution and presented to the user as a plain-language summary. Execution only proceeds on explicit "yes" or equivalent affirmation.
 
 ---
 
 ### 4.7 Frontend / Dashboard
 
-**Responsibility:** User interface for conversation, task management, settings, and briefing review.
+The dashboard is a web-based interface served locally at `http://localhost:3000`. It provides text-based chat, a task manager view, calendar summary, file search UI, settings, and memory review.
 
-#### 4.7.1 Mobile App (Primary — React Native)
+| Attribute | Detail |
+|-----------|--------|
+| Framework | React (Next.js — static export, no server-side rendering required) |
+| Styling | Tailwind CSS |
+| State | React Query for server state; Zustand for UI state |
+| Real-time updates | Server-Sent Events (SSE) from FastAPI backend |
+| Communication with backend | REST calls to `localhost:8000` |
+| Voice indicator | Visual waveform showing when Alex is listening or speaking |
 
-| Screen | Description |
-|--------|-------------|
-| **Home / Chat** | Conversation interface with voice + text input |
-| **Voice Mode** | Full-screen waveform; active listening state |
-| **Briefing View** | Scrollable morning briefing with action buttons |
-| **Tasks** | List of pending and completed tasks |
-| **Calendar** | Day/week view of scheduled events |
-| **Files** | Recent and searched files |
-| **Settings** | Connected accounts, tone preferences, working hours |
-
-#### 4.7.2 Web Dashboard (Secondary — Next.js)
-
-| Page | Description |
-|------|-------------|
-| `/` | Dashboard overview — tasks, today's schedule, recent activity |
-| `/chat` | Text-based conversation interface |
-| `/files` | File browser with semantic search |
-| `/settings` | Full settings management |
-| `/briefing` | Today's briefing (read-only web view) |
-
-#### 4.7.3 Real-time Updates
-
-- **Technology:** Supabase Realtime (WebSocket subscriptions)
-- **What updates live:** Task status changes, incoming messages, automation progress, meeting transcription feed
+The dashboard is accessible only from `localhost`. It is not exposed to the network by default.
 
 ---
 
 ### 4.8 Monitoring & Logging
 
-**Responsibility:** Observe system health, track errors, and capture usage analytics.
+All system activity is logged to the `audit_logs` table in SQLite and simultaneously to a rotating log file on disk.
 
-#### 4.8.1 Monitoring Stack
+| Log Type | Content | Retention |
+|----------|---------|-----------|
+| Command log | Raw input, parsed intent, execution plan, result | 90 days |
+| Action log | Each step executed, status, duration | 90 days |
+| Error log | Stack traces, failed steps, recovery actions | 180 days |
+| Performance log | Latency per component, model inference time | 30 days |
 
-| Tool | Purpose | What It Tracks |
-|------|---------|---------------|
-| **Sentry** | Error tracking | Unhandled exceptions, API failures, crash reports |
-| **PostHog** | Product analytics | Feature usage, session events, funnel completion |
-| **Axiom / Logtail** | Log management | Structured logs from all modules |
-| **Upstash Redis** | Queue monitoring | BullMQ job success/fail rates, queue depth |
-| **Supabase Dashboard** | DB monitoring | Query performance, connection pool |
+**Metrics Dashboard (v1.0)**
 
-#### 4.8.2 Logging Schema (every action)
-
-```json
-{
-  "timestamp":   "2026-03-24T07:15:03Z",
-  "session_id":  "sess_abc123",
-  "event_type":  "tool_call",
-  "tool_name":   "send_email",
-  "status":      "success",
-  "latency_ms":  847,
-  "input_hash":  "sha256:...",
-  "error":       null
-}
-```
-
-#### 4.8.3 Alerting Rules
-
-| Condition | Alert |
-|-----------|-------|
-| Tool call failure rate > 10% in 5 min | PagerDuty / email alert |
-| Voice response latency > 3s avg | Warning log + Sentry event |
-| BullMQ queue depth > 50 jobs | Slack notification |
-| Supabase connection pool > 80% | Warning |
-| Claude API error rate > 5% | Immediate alert |
+A lightweight metrics endpoint at `GET /metrics` returns a JSON payload with key performance indicators: intent accuracy (user-corrected vs. accepted), task completion rate, average response latency, and model mode (free/paid). This feeds a simple dashboard panel accessible from the frontend.
 
 ---
 
 ## 5.0 Data Flow
 
-### 5.1 Primary Request → Response Cycle
+### 5.1 Standard Request → Process → Response Cycle
+
+The following describes the complete lifecycle of a voice command from capture to response.
 
 ```
-[1] USER SPEAKS: "Find the Q3 report and email it to Arjun"
-         │
-         ▼
-[2] WAKE WORD DETECTED (Porcupine on-device)
-    → Microphone activated
-         │
-         ▼
-[3] AUDIO STREAMED TO DEEPGRAM
-    → Partial transcripts rendered live in UI
-    → Final transcript: "Find the Q3 report and email it to Arjun"
-         │
-         ▼
-[4] CONTEXT ASSEMBLED
-    ├── System prompt (cached)
-    ├── User profile pulled from Supabase
-    ├── Last 10 conversation turns from Redis
-    └── Current time, today's calendar
-         │
-         ▼
-[5] CLAUDE API CALLED (claude-sonnet-4-20250514, streaming, tools enabled)
-    → Claude determines: needs search_files + send_email
-         │
-         ▼
-[6] TOOL: search_files("Q3 report")
-    → Query embedded → pgvector similarity search
-    → Top result: "Q3_Sales_Report_2025.pdf" (Google Drive)
-    → File URL + metadata returned to Claude
-         │
-         ▼
-[7] TOOL: send_email(to="Arjun", subject="...", body="...", attach=file_url)
-    → Contact resolved: arjun@company.com
-    → Email drafted by Claude
-    → Attached via Google Drive link
-    → Sent via Gmail API
-    → Logged to sent_messages table
-         │
-         ▼
-[8] CLAUDE GENERATES FINAL RESPONSE (streaming text)
-    → "Done — I found the Q3 Sales Report and emailed it to Arjun 
-       at arjun@company.com with a note that it's ready for review."
-         │
-         ▼
-[9] TEXT STREAMED TO ELEVENLABS TTS
-    → Audio chunks streamed back as text is generated
-    → User hears response in ≤ 2s from step [3]
-         │
-         ▼
-[10] POST-PROCESSING
-    → Conversation turn stored in Redis (short-term)
-    → Action logged to Supabase (long-term)
-    → Memory updated: "Arjun prefers email for reports"
+Step 1: CAPTURE
+  User speaks "Hey Alex, email the Q1 report to Priya"
+  └─ Wake word detector fires → STT listener activates
+  └─ Whisper transcribes audio → text string produced
+
+Step 2: PARSE
+  Text sent to Intent Parser via internal event
+  └─ AI Model Router called with prompt template + user text
+  └─ Model returns structured intent JSON
+  └─ Intent Parser validates and enriches with entity resolution
+
+Step 3: PLAN
+  Intent object passed to Task Planner
+  └─ Multi-step plan constructed:
+       Step A: file_search("Q1 report")
+       Step B: send_email(to="Priya", attach=Step_A_result)
+  └─ Plan serialized as human-readable confirmation request
+
+Step 4: CONFIRM
+  Confirmation request sent to Voice Layer as TTS:
+  "I'll search for the Q1 report and email it to Priya.
+   Should I go ahead?"
+  └─ User responds "Yes"
+  └─ Confirmation captured and validated
+
+Step 5: EXECUTE
+  Automation Engine executes plan:
+  └─ Step A: File Search Engine queries Whoosh index
+             → returns /docs/Q1_Report_2026.pdf (confidence: 0.97)
+  └─ Step B: Communication Layer composes email
+             → contact resolved: priya@example.com
+             → file attached as MIME attachment
+             → SMTP send executed
+             → delivery confirmation received
+
+Step 6: LOG & MEMORIZE
+  └─ Command, plan, and result written to audit_logs
+  └─ Interaction summary embedded and stored in ChromaDB
+  └─ Contact "Priya" interaction frequency updated in SQLite
+
+Step 7: RESPOND
+  └─ TTS synthesizes: "Done. I've emailed the Q1 report to Priya."
+  └─ Dashboard updates task history in real time via SSE
 ```
 
-### 5.2 Morning Briefing Flow
+### 5.2 Morning Briefing Data Flow
 
 ```
-[1] SCHEDULED JOB fires at 07:00 AM (BullMQ)
-         │
-         ▼
-[2] PARALLEL DATA FETCH
-    ├── Google Calendar: today's events
-    ├── Tasks DB: pending + overdue tasks
-    ├── Gmail: unread important messages (priority inbox)
-    └── Memory: active projects, recent decisions
-         │
-         ▼
-[3] CLAUDE GENERATES BRIEFING
-    → Structured prompt: "Generate morning briefing for [user]..."
-    → Output: prioritized summary, schedule, top 3 action items
-         │
-         ▼
-[4] BRIEFING STORED in Supabase (briefings table)
-         │
-         ▼
-[5] PUSH NOTIFICATION sent to mobile app
-         │
-         ▼
-[6] USER OPENS APP → TTS reads briefing aloud
-    → User can interrupt with voice at any point
-    → Briefing transitions to live conversation
+APScheduler fires at configured briefing time (e.g., 7:30 AM)
+  └─ Briefing Composer queries:
+       ├─ SQLite: tasks due today + overdue tasks
+       ├─ SQLite: reminders for today
+       ├─ Google Calendar API: today's events
+       └─ IMAP: unread emails flagged as priority
+  └─ Briefing Composer sends all data to AI Model Router
+  └─ Model generates concise natural-language briefing
+  └─ TTS synthesizes and plays briefing audio
+  └─ Dashboard displays briefing text simultaneously
 ```
 
-### 5.3 Autonomous Multi-Step Task Flow
+### 5.3 File Indexing Data Flow
 
 ```
-[1] INPUT: "Schedule a call with Priya for Thursday, 
-           send her the contract, and remind me to 
-           prepare talking points Wednesday night"
-         │
-         ▼
-[2] CLAUDE CREATES PLAN (3 steps with dependencies)
-    Step A: get_calendar(Thursday) → find free slot
-    Step B: create_event(Priya, Thursday 2PM) → send invite
-    Step C: search_files("contract") → send_whatsapp(Priya, file)
-    Step D: create_task("Prepare talking points", due=Wednesday 8PM)
-         │
-         ▼
-[3] AUTOMATION ENGINE executes steps A → B → C → D
-    (B depends on A; C runs parallel to B; D is independent)
-         │
-         ▼
-[4] EACH STEP: execute → store result → update UI in real-time
-         │
-         ▼
-[5] COMPLETION NOTIFICATION:
-    "All done — call booked for Thursday 2 PM,
-     contract sent to Priya on WhatsApp,
-     and I've set a reminder for Wednesday at 8 PM."
+Watchdog detects new file: /docs/contract_ACME_2026.pdf
+  └─ File metadata extracted (name, path, size, dates)
+  └─ Apache Tika extracts text content
+  └─ Sentence Transformer generates embedding vector
+  └─ Whoosh index updated (keyword metadata)
+  └─ ChromaDB updated (semantic embedding)
+  └─ Index update logged
+Total time: < 2 seconds for typical document
 ```
 
 ---
 
 ## 6.0 API Design
 
-### 6.1 Base Configuration
+Alex's internal API runs on FastAPI at `localhost:8000`. All endpoints are authenticated with a locally generated API key stored in the user's environment. The API is not exposed beyond localhost.
 
-| Attribute | Value |
-|-----------|-------|
-| Protocol | HTTPS (REST) |
-| Base URL | `https://api.alexos.app/v1` |
-| Auth | Bearer token (JWT, 24h expiry + refresh token) |
-| Format | JSON (request + response) |
-| Streaming | Server-Sent Events (SSE) for voice/chat responses |
-| Rate Limiting | 120 requests/minute per user |
+### 6.1 Core Endpoints
 
-### 6.2 Core Endpoints
-
-#### Conversation
+**Command Endpoint**
 
 ```
-POST   /v1/chat
-       Body: { "input": "string", "session_id": "string", "mode": "text|voice" }
-       Response (SSE stream): { "type": "text|tool_call|done", "content": "..." }
+POST /api/v1/command
 
-GET    /v1/chat/history?session_id=&limit=
-       Response: { "messages": [...] }
-
-DELETE /v1/chat/session/:session_id
-       Response: { "deleted": true }
-```
-
-#### Files
-
-```
-POST   /v1/files/search
-       Body: { "query": "string", "limit": 5 }
-       Response: { "results": [{ "id", "name", "url", "score", "preview" }] }
-
-POST   /v1/files/index
-       Body: { "force": false }
-       Response: { "job_id": "string", "status": "queued" }
-
-GET    /v1/files/index/status/:job_id
-       Response: { "status": "running|complete|failed", "indexed": 234 }
-```
-
-#### Communication
-
-```
-POST   /v1/email/send
-       Body: { "to": "name|email", "subject": "...", "body": "...", "attach_file_id": "..." }
-       Response: { "message_id": "...", "status": "sent" }
-
-POST   /v1/whatsapp/send
-       Body: { "to": "name|phone", "message": "...", "attach_file_id": "..." }
-       Response: { "message_id": "...", "status": "queued" }
-```
-
-#### Calendar
-
-```
-GET    /v1/calendar/events?date=YYYY-MM-DD&range=day|week
-       Response: { "events": [{ "id", "title", "start", "end", "attendees" }] }
-
-GET    /v1/calendar/free-slots?date=YYYY-MM-DD&duration_mins=60
-       Response: { "slots": [{ "start", "end" }] }
-
-POST   /v1/calendar/events
-       Body: { "title", "start", "end", "attendees": [], "description": "..." }
-       Response: { "event_id": "...", "calendar_link": "..." }
-
-PATCH  /v1/calendar/events/:event_id
-PUT    /v1/calendar/events/:event_id  (reschedule)
-DELETE /v1/calendar/events/:event_id
-```
-
-#### Tasks
-
-```
-GET    /v1/tasks?status=pending|completed|overdue
-POST   /v1/tasks
-       Body: { "title", "due_at": "ISO8601", "related_contact": "...", "context": "..." }
-PATCH  /v1/tasks/:task_id   Body: { "status": "completed" }
-DELETE /v1/tasks/:task_id
-```
-
-#### Memory
-
-```
-GET    /v1/memory?category=preference|contact|project
-POST   /v1/memory
-       Body: { "key": "...", "value": "...", "category": "...", "confidence": 0.9 }
-DELETE /v1/memory/:memory_id
-```
-
-#### Briefing
-
-```
-GET    /v1/briefing/today
-       Response: { "briefing_id", "generated_at", "content": "...", "tts_url": "..." }
-
-POST   /v1/briefing/generate
-       Response: { "job_id": "..." }  (async)
-```
-
-#### Automations
-
-```
-POST   /v1/automation/run
-       Body: { "plan": { "steps": [...] } }
-       Response: { "plan_id": "...", "status": "running" }
-
-GET    /v1/automation/:plan_id/status
-       Response: { "plan_id", "steps": [{ "id", "status", "result" }] }
-```
-
-### 6.3 Standard Response Format
-
-```json
+Request:
 {
-  "success": true,
-  "data": { ... },
-  "error": null,
-  "meta": {
-    "request_id": "req_abc123",
-    "timestamp": "2026-03-24T07:15:03Z",
-    "latency_ms": 284
-  }
+  "input":  "Email the Q1 report to Priya",
+  "source": "voice" | "text",
+  "session_id": "uuid"
+}
+
+Response (pending confirmation):
+{
+  "status":      "awaiting_confirmation",
+  "plan_id":     "uuid",
+  "preview":     "I'll search for the Q1 report and email it to Priya.",
+  "plan_steps":  [
+    { "step": 1, "action": "file_search", "description": "Search for Q1 report" },
+    { "step": 2, "action": "send_email",  "description": "Email to Priya (priya@example.com)" }
+  ]
+}
+
+Response (completed):
+{
+  "status":    "success",
+  "response":  "Done. I've emailed the Q1 report to Priya.",
+  "actions":   ["file_search", "send_email"],
+  "duration_ms": 1840
 }
 ```
 
-### 6.4 Error Response Format
+**Confirmation Endpoint**
 
-```json
+```
+POST /api/v1/confirm
+
+Request:
 {
-  "success": false,
-  "data": null,
-  "error": {
-    "code": "CONTACT_NOT_FOUND",
-    "message": "Could not resolve contact 'Priya'. Did you mean Priya Sharma or Priya Mehta?",
-    "suggestions": ["Priya Sharma", "Priya Mehta"]
-  },
-  "meta": { "request_id": "req_abc123", "timestamp": "..." }
+  "plan_id":  "uuid",
+  "decision": "confirm" | "cancel" | "modify"
 }
+
+Response:
+{
+  "status":   "executing" | "cancelled",
+  "plan_id":  "uuid"
+}
+```
+
+**File Search Endpoint**
+
+```
+GET /api/v1/files/search?q={query}&limit={n}&mode=keyword|semantic|hybrid
+
+Response:
+{
+  "results": [
+    {
+      "file_id":    "uuid",
+      "name":       "Q1_Report_2026.pdf",
+      "path":       "/Users/user/Documents/Q1_Report_2026.pdf",
+      "relevance":  0.97,
+      "modified":   "2026-02-14T10:00:00Z",
+      "size_bytes": 204800
+    }
+  ],
+  "total": 1,
+  "mode_used": "hybrid"
+}
+```
+
+**Task Endpoints**
+
+```
+GET    /api/v1/tasks?status=pending|completed|overdue
+POST   /api/v1/tasks          { title, due_date, priority, notes }
+PATCH  /api/v1/tasks/{id}     { status, due_date, notes }
+DELETE /api/v1/tasks/{id}
+
+GET    /api/v1/reminders
+POST   /api/v1/reminders      { message, trigger_at, repeat }
+DELETE /api/v1/reminders/{id}
+```
+
+**Memory & Preferences Endpoints**
+
+```
+GET    /api/v1/memory/preferences
+PATCH  /api/v1/memory/preferences   { key, value }
+DELETE /api/v1/memory/preferences/{key}
+
+GET    /api/v1/memory/history?limit=50
+DELETE /api/v1/memory/history        (wipes conversation memory)
+```
+
+**Settings Endpoint**
+
+```
+GET   /api/v1/settings
+PATCH /api/v1/settings
+
+Patchable fields:
+{
+  "ai_mode":          "free" | "paid",
+  "paid_provider":    "anthropic" | "openai",
+  "briefing_time":    "HH:MM",
+  "watched_dirs":     ["/path/one", "/path/two"],
+  "voice_enabled":    true | false,
+  "tts_voice":        "default" | "custom_id",
+  "confirm_actions":  true | false
+}
+```
+
+**System-Sent Events Stream**
+
+```
+GET /api/v1/events   (text/event-stream)
+
+Event types:
+  alex.response_ready     → new assistant message available
+  alex.action_completed   → an action step finished
+  alex.action_failed      → an action step failed
+  alex.briefing_ready     → morning briefing generated
+  alex.reminder_triggered → a reminder is due
 ```
 
 ---
 
 ## 7.0 Database Schema
 
-### 7.1 Schema Diagram
+### 7.1 SQLite Schema
 
-```
-┌─────────────────────┐         ┌─────────────────────────┐
-│       users         │         │       sessions           │
-├─────────────────────┤         ├─────────────────────────┤
-│ id (PK, UUID)       │─────────│ id (PK, UUID)            │
-│ name                │  1:many │ user_id (FK → users)     │
-│ email               │         │ started_at               │
-│ working_hours_start │         │ ended_at                 │
-│ working_hours_end   │         │ summary                  │
-│ timezone            │         └─────────────────────────┘
-│ tone_preference     │
-│ created_at          │
-└──────────┬──────────┘
-           │ 1:many
-           │
-     ┌─────┼──────────────────────────────────────────────┐
-     │     │                                              │
-     ▼     ▼                                              ▼
-┌─────────────────────┐  ┌─────────────────────┐  ┌───────────────────────┐
-│      memories       │  │       tasks          │  │      contacts         │
-├─────────────────────┤  ├─────────────────────┤  ├───────────────────────┤
-│ id (PK, UUID)       │  │ id (PK, UUID)        │  │ id (PK, UUID)         │
-│ user_id (FK)        │  │ user_id (FK)         │  │ user_id (FK)          │
-│ key                 │  │ title                │  │ name                  │
-│ value               │  │ description          │  │ email                 │
-│ category            │  │ status               │  │ phone                 │
-│   (preference,      │  │   (pending,          │  │ preferred_channel     │
-│    contact,         │  │    complete,         │  │   (email|whatsapp)    │
-│    project,         │  │    overdue)          │  │ interaction_count     │
-│    fact)            │  │ due_at               │  │ last_interaction_at   │
-│ confidence (0-1)    │  │ related_contact_id   │  │ notes                 │
-│ source              │  │   (FK → contacts)   │  └───────────────────────┘
-│ embedding (vector)  │  │ created_at           │
-│ created_at          │  │ completed_at         │
-│ updated_at          │  └─────────────────────┘
-└─────────────────────┘
-           │
-           ▼
-┌─────────────────────────┐  ┌─────────────────────────────┐
-│    sent_messages        │  │         files               │
-├─────────────────────────┤  ├─────────────────────────────┤
-│ id (PK, UUID)           │  │ id (PK, UUID)               │
-│ user_id (FK)            │  │ user_id (FK)                │
-│ channel (email|whatsapp)│  │ name                        │
-│ to_contact_id (FK)      │  │ drive_id                    │
-│ subject                 │  │ mime_type                   │
-│ body_preview            │  │ drive_url                   │
-│ has_attachment          │  │ content_preview             │
-│ attachment_file_id (FK) │  │ embedding (vector[1536])    │
-│ external_message_id     │  │ indexed_at                  │
-│ status                  │  │ last_modified               │
-│ sent_at                 │  └─────────────────────────────┘
-└─────────────────────────┘
+All tables reside in a single SQLite file: `~/.alex/alex.db`.
 
-┌─────────────────────────────┐  ┌──────────────────────────────┐
-│         events              │  │         briefings            │
-├─────────────────────────────┤  ├──────────────────────────────┤
-│ id (PK, UUID)               │  │ id (PK, UUID)                │
-│ user_id (FK)                │  │ user_id (FK)                 │
-│ calendar_event_id (external)│  │ date (DATE)                  │
-│ title                       │  │ content (TEXT)               │
-│ start_at                    │  │ tts_url                      │
-│ end_at                      │  │ tasks_snapshot (JSONB)       │
-│ attendees (JSONB)           │  │ events_snapshot (JSONB)      │
-│ transcript (TEXT)           │  │ generated_at                 │
-│ summary                     │  │ opened_at                    │
-│ action_items (JSONB)        │  └──────────────────────────────┘
-│ meeting_status              │
-│   (scheduled,               │  ┌──────────────────────────────┐
-│    live, complete)          │  │     automation_plans         │
-└─────────────────────────────┘  ├──────────────────────────────┤
-                                  │ id (PK, UUID)                │
-                                  │ user_id (FK)                 │
-                                  │ trigger_text                 │
-                                  │ steps (JSONB)                │
-                                  │ status                       │
-                                  │   (pending,running,          │
-                                  │    complete,failed)          │
-                                  │ created_at                   │
-                                  │ completed_at                 │
-                                  └──────────────────────────────┘
-```
-
-### 7.2 Key Indexes
-
+**contacts**
 ```sql
--- Semantic search
-CREATE INDEX idx_files_embedding ON files 
-  USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+CREATE TABLE contacts (
+  id           TEXT PRIMARY KEY,          -- UUID
+  display_name TEXT NOT NULL,
+  aliases      TEXT,                      -- JSON array of nicknames
+  email        TEXT,
+  phone        TEXT,
+  whatsapp_id  TEXT,
+  frequency    INTEGER DEFAULT 0,         -- interaction count for ranking
+  notes        TEXT,
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+);
+```
 
-CREATE INDEX idx_memories_embedding ON memories 
-  USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+**tasks**
+```sql
+CREATE TABLE tasks (
+  id           TEXT PRIMARY KEY,
+  title        TEXT NOT NULL,
+  description  TEXT,
+  status       TEXT DEFAULT 'pending',    -- pending | in_progress | completed | overdue
+  priority     TEXT DEFAULT 'normal',     -- low | normal | high | urgent
+  due_date     TEXT,                      -- ISO8601
+  source       TEXT,                      -- "voice" | "meeting" | "manual"
+  meeting_id   TEXT,                      -- FK → meetings.id (nullable)
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+);
+```
 
--- Frequent lookups
-CREATE INDEX idx_tasks_user_status ON tasks (user_id, status);
-CREATE INDEX idx_events_user_date ON events (user_id, start_at);
-CREATE INDEX idx_messages_user_channel ON sent_messages (user_id, channel, sent_at);
-CREATE INDEX idx_contacts_user_name ON contacts (user_id, name);
+**reminders**
+```sql
+CREATE TABLE reminders (
+  id           TEXT PRIMARY KEY,
+  message      TEXT NOT NULL,
+  trigger_at   TEXT NOT NULL,             -- ISO8601
+  repeat       TEXT DEFAULT 'none',       -- none | daily | weekly
+  status       TEXT DEFAULT 'active',     -- active | triggered | dismissed
+  task_id      TEXT,                      -- FK → tasks.id (nullable)
+  created_at   TEXT NOT NULL
+);
+```
+
+**meetings**
+```sql
+CREATE TABLE meetings (
+  id               TEXT PRIMARY KEY,
+  title            TEXT,
+  started_at       TEXT NOT NULL,
+  ended_at         TEXT,
+  transcript_path  TEXT,                  -- path to raw transcript file
+  summary          TEXT,                  -- AI-generated summary
+  action_items     TEXT,                  -- JSON array of extracted action items
+  participants     TEXT,                  -- JSON array of names
+  created_at       TEXT NOT NULL
+);
+```
+
+**calendar_events**
+```sql
+CREATE TABLE calendar_events (
+  id              TEXT PRIMARY KEY,
+  external_id     TEXT,                   -- Google Calendar event ID
+  title           TEXT NOT NULL,
+  description     TEXT,
+  start_time      TEXT NOT NULL,
+  end_time        TEXT NOT NULL,
+  location        TEXT,
+  attendees       TEXT,                   -- JSON array
+  provider        TEXT DEFAULT 'google',
+  synced_at       TEXT NOT NULL
+);
+```
+
+**preferences**
+```sql
+CREATE TABLE preferences (
+  key          TEXT PRIMARY KEY,
+  value        TEXT NOT NULL,             -- JSON-encoded value
+  category     TEXT,                      -- "communication" | "voice" | "search" | "system"
+  updated_at   TEXT NOT NULL
+);
+```
+
+**file_index**
+```sql
+CREATE TABLE file_index (
+  id            TEXT PRIMARY KEY,
+  name          TEXT NOT NULL,
+  path          TEXT NOT NULL UNIQUE,
+  extension     TEXT,
+  size_bytes    INTEGER,
+  content_hash  TEXT,                     -- SHA256 for change detection
+  indexed_at    TEXT NOT NULL,
+  modified_at   TEXT NOT NULL
+);
+```
+
+**audit_logs**
+```sql
+CREATE TABLE audit_logs (
+  id            TEXT PRIMARY KEY,
+  session_id    TEXT NOT NULL,
+  input_text    TEXT,
+  intent        TEXT,                     -- JSON intent object
+  plan          TEXT,                     -- JSON execution plan
+  result        TEXT,                     -- JSON result
+  status        TEXT,                     -- success | partial_failure | failure | cancelled
+  duration_ms   INTEGER,
+  ai_mode       TEXT,                     -- free | paid
+  model_used    TEXT,
+  created_at    TEXT NOT NULL
+);
+```
+
+### 7.2 ChromaDB Collections
+
+ChromaDB runs locally at `~/.alex/chroma/`. Two collections are maintained.
+
+**collection: `conversation_memory`**
+
+Stores embeddings of past interactions for semantic recall across sessions.
+
+```
+document:  Full text of past interaction (input + response)
+metadata:  { session_id, timestamp, intent, actions_taken }
+embedding: all-MiniLM-L6-v2 vector (384 dimensions)
+```
+
+**collection: `file_semantic_index`**
+
+Stores embeddings of file content summaries for semantic file search.
+
+```
+document:  Extracted text content or summary (first 512 tokens)
+metadata:  { file_id, name, path, extension, modified_at }
+embedding: all-MiniLM-L6-v2 vector (384 dimensions)
+```
+
+### 7.3 Entity Relationships
+
+```
+contacts ──────────────── audit_logs
+    │                         │
+    │                         │ (session tracing)
+    ▼                         ▼
+tasks ────── reminders    meetings
+    │                         │
+    └─────────────────────────┘
+              (action items from meetings → tasks)
+
+calendar_events ← (synced from Google Calendar API)
+preferences     ← (read by all components at runtime)
+file_index      ← (maintained by File & Search Layer)
 ```
 
 ---
 
 ## 8.0 Integration Points
 
-### 8.1 Integration Map
-
-```
-Alex Core
-    │
-    ├── Google Suite
-    │     ├── Gmail API (OAuth 2.0)          → Send/read emails
-    │     ├── Google Calendar API (OAuth 2.0) → Events, free/busy
-    │     └── Google Drive API (OAuth 2.0)    → File index + download
-    │
-    ├── Meta
-    │     └── WhatsApp Business API           → Send messages + media
-    │
-    ├── AI / ML
-    │     ├── Anthropic Claude API            → Intelligence core
-    │     ├── Deepgram API                    → STT (streaming)
-    │     ├── ElevenLabs API                  → TTS (streaming)
-    │     └── OpenAI Embeddings API           → File + memory embeddings
-    │
-    ├── Infrastructure
-    │     ├── Supabase                        → DB + auth + realtime
-    │     ├── Upstash Redis                   → Cache + queues
-    │     └── Vercel / Railway                → Backend deployment
-    │
-    └── Monitoring
-          ├── Sentry                          → Error tracking
-          ├── PostHog                         → Analytics
-          └── Axiom                           → Log management
-```
-
-### 8.2 Integration Details
-
-#### Google OAuth 2.0 (Gmail, Calendar, Drive)
+### 8.1 Google Calendar
 
 | Attribute | Detail |
 |-----------|--------|
-| Scopes | `gmail.send`, `gmail.readonly`, `calendar.events`, `drive.readonly` |
-| Token storage | Encrypted in Supabase (`oauth_tokens` table), AES-256 |
-| Refresh | Automatic via Google refresh token (never expiring) |
-| Quota | Gmail: 1B units/day; Calendar: 1M requests/day; Drive: 1B units/day |
-| Revocation | User can disconnect from Settings; tokens deleted immediately |
+| API | Google Calendar API v3 |
+| Auth | OAuth 2.0 (user grants access during onboarding) |
+| Scope | `calendar.readonly` for read; `calendar.events` for write |
+| Sync direction | Bidirectional (read availability, write new events) |
+| Refresh | Polled every 5 minutes by the APScheduler background job |
+| Local cache | Stored in `calendar_events` SQLite table |
+| Provider scope | Google Calendar only in v1.0; multi-provider deferred |
 
-#### Meta WhatsApp Business API
-
-| Attribute | Detail |
-|-----------|--------|
-| API Type | Cloud API (Meta-hosted) |
-| Auth | Permanent system user access token |
-| Message window | Freeform messages only within 24h of last user message |
-| Outside 24h | Must use approved message templates |
-| Media | Supports documents, images, audio (≤ 100MB) |
-| Webhooks | Message status updates (sent/delivered/read) → `/webhooks/whatsapp` |
-
-#### Anthropic Claude API
+### 8.2 Email (Gmail / SMTP-IMAP)
 
 | Attribute | Detail |
 |-----------|--------|
-| Model | `claude-sonnet-4-20250514` |
-| Auth | API key (env variable; never exposed to client) |
-| Features used | Messages API, tool use, streaming, prompt caching |
-| Cost control | Prompt caching on system prompt; max_tokens=4096 hard cap |
-| Fallback | If Claude API unavailable → queue request, notify user of delay |
+| Outbound | SMTP via port 587 with STARTTLS |
+| Inbound | IMAP over SSL port 993 |
+| Default provider | Gmail |
+| Extensibility | Any SMTP/IMAP provider configurable via settings |
+| Auth | App password or OAuth 2.0 (Gmail) |
+| Credential storage | AES-256 encrypted in SQLite |
+| Priority inbox | IMAP search for `FLAGGED` or `UNSEEN` messages for briefing |
 
-#### Deepgram (STT)
+### 8.3 WhatsApp
+
+| Attribute | Free Mode | Paid Mode |
+|-----------|-----------|-----------|
+| Provider | Twilio WhatsApp Sandbox | Twilio Business API |
+| Fallback | `whatsapp-web.js` (Chrome bridge) | — |
+| Message types | Text, document, image | Same |
+| Auth | Twilio account SID + auth token | Same |
+| Rate limits | Sandbox: 1 message/second | Business: higher limits |
+
+### 8.4 Local AI — Ollama (Free Mode)
 
 | Attribute | Detail |
 |-----------|--------|
-| Model | Nova-3 (latest, streaming-optimised) |
-| Protocol | WebSocket (bidirectional) |
-| Features | Interim results, endpointing, smart formatting, punctuation |
-| Auth | API key (server-side only) |
+| Runtime | Ollama (local model server at `http://localhost:11434`) |
+| Primary model | Mistral 7B Instruct (`mistral:7b-instruct`) |
+| Fallback model | LLaMA 3.1 8B Instruct (`llama3.1:8b`) |
+| Hardware requirement | 8 GB RAM minimum for 7B models; 16 GB recommended |
+| Quantization | Q4_K_M (4-bit quantized for CPU inference) |
+| API format | OpenAI-compatible REST endpoint |
 
-#### ElevenLabs (TTS)
+### 8.5 Paid AI APIs (Upgrade Mode)
 
-| Attribute | Detail |
-|-----------|--------|
-| Model | `eleven_turbo_v2` (low latency) |
-| Voice | Custom Alex voice (cloned or selected from library) |
-| Streaming | WebSocket → chunk audio as text is being generated |
-| Fallback | Google Cloud TTS (WaveNet en-US Standard) |
+| Provider | Model | Endpoint |
+|----------|-------|----------|
+| Anthropic | claude-sonnet-4-20250514 | `https://api.anthropic.com/v1/messages` |
+| OpenAI | GPT-4o | `https://api.openai.com/v1/chat/completions` |
+
+Both providers are accessed through the AI Model Router using a shared interface. API keys are stored encrypted in SQLite and never written to environment variables or config files in plaintext.
+
+### 8.6 Speech Processing
+
+| Function | Free Mode | Paid Mode |
+|----------|-----------|-----------|
+| STT | `faster-whisper` (local) | OpenAI Whisper API |
+| TTS | Coqui TTS (local) | ElevenLabs API |
+| Wake word | Porcupine (offline) | Porcupine (same) |
+| Meeting transcription | `faster-whisper` (local) | OpenAI Whisper API |
+
+### 8.7 Integration Health Monitoring
+
+Each integration point is registered in a health registry checked every 60 seconds by the APScheduler. If an integration fails (e.g., SMTP timeout, Google Calendar auth expiry), the user is notified via the dashboard and, if voice is active, a brief TTS alert. The system continues operating in degraded mode for unaffected components.
 
 ---
 
 ## 9.0 Scalability Considerations
 
-> Note: Alex v1.0 is single-user. These considerations document how the system is designed to scale when needed, without requiring a rewrite.
+### 9.1 v1.0 Scope
 
-### 9.1 Horizontal Scaling Path
+Alex v1.0 is a single-user, local system. Traditional horizontal scalability is not a concern. The scalability considerations below address performance headroom and the v1.1 extraction path.
 
-| Component | v1.0 | v2.0 Scale Path |
-|-----------|------|-----------------|
-| API Server | Single Node.js process (Railway) | Horizontal pod autoscaling (Kubernetes) |
-| Database | Single Supabase project | Read replicas + connection pooler (PgBouncer) |
-| Cache | Single Upstash Redis instance | Redis Cluster |
-| Queue | BullMQ (single worker) | Multiple BullMQ workers, partitioned queues |
-| File indexer | Single scheduled job | Distributed indexing workers per user |
-| LLM calls | Sequential | Parallel requests + request batching |
+### 9.2 Performance Limits & Mitigations
 
-### 9.2 Performance Optimisations in v1.0
+| Component | Limit in v1.0 | Mitigation |
+|-----------|--------------|------------|
+| Ollama inference (7B model) | 5–15 tokens/sec on CPU | Response streaming; confirm UI shows progress |
+| File index size | Up to ~100,000 files | Whoosh index is efficient to this scale; ChromaDB handles up to 1M vectors |
+| SQLite concurrency | Single writer | All writes serialized through the API server; no concurrent user issue in v1.0 |
+| SMTP send throughput | Rate-limited by provider | Queue-based dispatch; no burst sending scenario in v1.0 |
+| Memory (ChromaDB) | Up to 5 GB on disk for embeddings at scale | Configurable retention; older embeddings pruned after 90 days by default |
 
-| Optimisation | Implementation |
-|-------------|---------------|
-| Prompt caching | Static system prompt cached in Claude API (saves ~70% tokens) |
-| Streaming responses | SSE from Claude → TTS → user (no waiting for full response) |
-| Redis session cache | Conversation context in Redis (< 1ms read vs. DB) |
-| Embedding cache | File embeddings stored; only re-embed on file change |
-| Lazy file indexing | Delta sync only (not full re-index every time) |
-| DB connection pool | Supabase pooler (max 10 connections for single-user) |
+### 9.3 v1.1 Extraction Path
 
-### 9.3 Data Volume Estimates (Single User, 12 Months)
+The modular monolith design ensures each component can be independently extracted:
 
-| Data Type | Estimated Volume |
-|-----------|-----------------|
-| Conversation turns | ~7,000 turns (20/day × 365) |
-| Files indexed | ~2,000 files |
-| Embeddings (files) | ~10,000 vectors (1536-dim each) |
-| Tasks | ~2,000 records |
-| Sent messages | ~1,500 records |
-| Calendar events | ~500 records |
-| Memory records | ~500 records |
-| **Total DB size** | **< 2 GB** |
+- The **AI Model Router** can be wrapped in a FastAPI microservice with a stable interface.
+- The **File & Search Layer** can be moved to a dedicated process using the same internal REST API contract.
+- **SQLite** can be migrated to PostgreSQL by changing the database URL — the ORM layer (SQLAlchemy) abstracts all SQL dialect differences.
+- The **frontend** is already decoupled via REST and SSE; it can be deployed independently with no changes.
 
 ---
 
 ## 10.0 Open Questions
 
-| # | Question | Impact | Decision Needed By |
-|---|----------|--------|-------------------|
-| OQ-SD-1 | Should the Node.js backend be deployed on Railway or Vercel (serverless)? Serverless has cold start latency risk for voice. | Latency target of ≤ 2s may be violated with cold starts | Before engineering begins |
-| OQ-SD-2 | Use pgvector (in Supabase) or a dedicated vector DB (Pinecone) for embeddings? | Pinecone is faster at scale; pgvector simpler for v1.0 | Before file layer build |
-| OQ-SD-3 | OpenAI `text-embedding-3-small` or Anthropic Voyage for embeddings? Voyage is better for code/documents; OpenAI is cheaper | Quality vs. cost | Before file indexer build |
-| OQ-SD-4 | How should the system handle the WhatsApp 24h message window for proactive messages (briefing shares, follow-ups)? | May require pre-approved templates for all proactive sends | Before comm layer build |
-| OQ-SD-5 | Should conversation history be summarised (compressed) automatically after N turns, or use full history with sliding window? | Affects token cost and context quality | Before intelligence layer build |
-| OQ-SD-6 | Is a settings UI required in v1.0 or can all preferences be set by voice ("Alex, change my tone to casual")? | Affects frontend scope | Before dashboard build |
+The following questions from PRD.md (OQ-1 through OQ-8) are resolved by this document where applicable, with residual items noted.
+
+| # | Question | Resolution |
+|---|----------|------------|
+| OQ-1 | Default local AI model | **Resolved:** Mistral 7B via Ollama (primary); LLaMA 3.1 8B (fallback) |
+| OQ-2 | WhatsApp integration mechanism | **Resolved:** Twilio Sandbox (free); Twilio Business API (paid upgrade); `whatsapp-web.js` as zero-cost fallback |
+| OQ-3 | Meeting transcription without paid service | **Resolved:** `faster-whisper` running locally |
+| OQ-4 | Memory storage format | **Resolved:** SQLite (structured data) + ChromaDB (vector/semantic memory) |
+| OQ-5 | Offline wake word detection | **Resolved:** Porcupine by Picovoice (offline, CPU-efficient) |
+| OQ-6 | Calendar integration scope | **Partially resolved:** Google Calendar API v3 in v1.0; multi-provider deferred to v1.1 |
+| OQ-7 | Security model for credentials | **Open:** Addressed at architecture level (AES-256 in SQLite); full treatment in Security Document |
+| OQ-8 | Desktop vs. web delivery | **Resolved:** Web-based frontend at localhost:3000; no native app in v1.0 |
+
+**New Open Question from this document:**
+
+| # | Question | Owner | Resolution Target |
+|---|----------|-------|-------------------|
+| SDD-OQ-1 | What is the minimum hardware specification for running Mistral 7B locally? Should a hardware check run during onboarding? | Engineering | Before Tech Stack Document |
+| SDD-OQ-2 | Should Whisper model size (base vs. small vs. medium) be user-configurable, given the latency vs. accuracy trade-off? | Product | Before Feature List Document |
+| SDD-OQ-3 | What is the data migration path if the user's SQLite database grows beyond practical size in long-term use? | Architecture | Before v1.1 planning |
 
 ---
 
 ## 11.0 Next Steps
 
-| # | Action | Owner | Dependency |
-|---|--------|-------|-----------|
-| NS-1 | Resolve OQ-SD-1 through OQ-SD-3 (infrastructure + embedding decisions) | Engineering Lead | Immediately |
-| NS-2 | Set up Supabase project, define schemas, run migrations | Backend Engineer | After OQ-SD-2 resolved |
-| NS-3 | Configure Claude API key, test tool-use + streaming | Backend Engineer | Immediately |
-| NS-4 | Set up Meta WhatsApp Business API sandbox + test messaging | Backend Engineer | Immediately |
-| NS-5 | Scaffold `alex-core` monolith with module boundaries defined | Engineering Lead | After NS-1 |
-| NS-6 | Begin **User Flow Document** (Document 3) — map all user journeys to this architecture | Product + Engineering | After SYSTEM_DESIGN sign-off |
-| NS-7 | Review SYSTEM_DESIGN.md with all stakeholders and resolve open questions | All | Within 2 days |
+With the System Design Document complete, the following decisions are now locked and available to downstream documents:
+
+- Architecture pattern: modular monolith
+- Local AI: Mistral 7B via Ollama; LLaMA 3.1 8B as fallback
+- Paid AI: Anthropic Claude (primary); OpenAI GPT-4o (secondary)
+- STT: faster-whisper (free); OpenAI Whisper API (paid)
+- TTS: Coqui TTS (free); ElevenLabs (paid)
+- Wake word: Porcupine (offline)
+- Storage: SQLite + ChromaDB + Whoosh
+- Frontend: Next.js at localhost:3000
+- WhatsApp: Twilio Sandbox / whatsapp-web.js (free); Twilio Business (paid)
+- Calendar: Google Calendar API v3 (v1.0 only)
+
+The following documents are to be authored next, in order:
+
+1. **User Flow Document (v1.0)** — map all user journeys using the component architecture defined here. Reference the Request → Process → Response cycle from Section 5.0.
+2. **Feature List Document (v1.0)** — enumerate every feature with acceptance criteria, the specific components involved, and delivery estimates.
+3. **Tech Stack Requirements Document (v1.0)** — enumerate all libraries, frameworks, and services. Clearly mark each as free-mode, paid-mode, or both.
+4. **Security Document (v1.0)** — address OQ-7 fully: credential encryption, access control, local data protection, and action permission model.
+5. **AI Instructions Document (v1.0)** — define prompt templates for the Intent Parser, Task Planner, Briefing Composer, and all other AI-powered sub-components.
 
 ---
 
-*Decisions from this document will be referenced in all subsequent documentation: User Flows, Feature List, Tech Stack, Security, and AI Instructions.*
-
----
-
-**Document Control**
-
-| Field | Value |
-|-------|-------|
-| Document Name | SYSTEM_DESIGN.md |
-| Version | v1.0 |
-| Status | Draft |
-| Created | 24 March 2026 |
-| Last Updated | 24 March 2026 |
-| References | GOAL.md, PRD.md v1.0 |
+*Document maintained by the Alex Build Team. All decisions in this document supersede architectural assumptions made elsewhere. Version history tracked in the project changelog.*

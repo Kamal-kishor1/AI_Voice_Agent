@@ -1,31 +1,32 @@
-# User Flow Document — Alex: Personal AI Operating System
+# User Flow Document
+## Alex — Personal AI Operating System
 **Version:** v1.0
 **Date:** 24 March 2026
 **Status:** Draft
-**References:** GOAL.md, PRD.md v1.0, SYSTEM_DESIGN.md v1.0
-**Author:** Alex Project Team
+**Author:** Alex Build Team
+**References:** PRD.md v1.0, SYSTEM_DESIGN.md v1.0, TECH_STACK.md v1.0, GOAL.md
 
 ---
 
 ## Table of Contents
 
-1. [Purpose & Scope](#10-purpose--scope)
-2. [User Journey Overview](#20-user-journey-overview)
-3. [Core User Flows](#30-core-user-flows)
-   - 3.1 [Onboarding Flow](#31-onboarding-flow)
-   - 3.2 [Voice Command Flow](#32-voice-command-flow)
-   - 3.3 [File Search & Send Flow](#33-file-search--send-flow)
-   - 3.4 [Email Send Flow](#34-email-send-flow)
-   - 3.5 [WhatsApp Message Flow](#35-whatsapp-message-flow)
-   - 3.6 [Calendar Booking Flow](#36-calendar-booking-flow)
-   - 3.7 [Task & Reminder Flow](#37-task--reminder-flow)
-   - 3.8 [Morning Briefing Flow](#38-morning-briefing-flow)
-   - 3.9 [Meeting Transcription Flow](#39-meeting-transcription-flow)
-   - 3.10 [Multi-Step Task Flow](#310-multi-step-task-flow)
-4. [Edge Cases & Error Handling](#40-edge-cases--error-handling)
-5. [Confirmation & Permission Flows](#50-confirmation--permission-flows)
-6. [Open Questions](#60-open-questions)
-7. [Next Steps](#70-next-steps)
+1.0 Purpose & Scope
+2.0 User Journey Overview
+3.0 Core User Flows
+  - 3.1 Onboarding Flow
+  - 3.2 Voice Command Flow
+  - 3.3 File Search & Send Flow
+  - 3.4 Email Send Flow
+  - 3.5 WhatsApp Message Flow
+  - 3.6 Calendar Booking Flow
+  - 3.7 Task & Reminder Flow
+  - 3.8 Morning Briefing Flow
+  - 3.9 Meeting Transcription Flow
+  - 3.10 Multi-Step Task Flow
+4.0 Edge Cases & Error Handling
+5.0 Confirmation & Permission Flows
+6.0 Open Questions
+7.0 Next Steps
 
 ---
 
@@ -33,34 +34,25 @@
 
 ### 1.1 Purpose
 
-This document defines every significant user interaction with Alex — from first install through daily usage. It maps the complete journey a user takes for each major feature, including the happy path, all error paths, decision points, and recovery flows.
+This User Flow Document maps every major interaction a user has with Alex v1.0 — from first launch through day-to-day operation. For each flow it specifies the trigger that initiates it, every decision point the system encounters, the happy path through to a successful outcome, and the error paths that arise when things go wrong.
 
-This document is the source of truth for frontend engineers, UX designers, and QA teams. Every screen state, confirmation prompt, and error message is defined here.
+This document is the authoritative reference for frontend engineers building the dashboard, backend engineers implementing the API endpoints, and QA engineers writing acceptance tests. Every screen state, every WebSocket event, and every confirmation prompt described in this document corresponds directly to a component or endpoint defined in SYSTEM_DESIGN.md and TECH_STACK.md.
 
-### 1.2 Decisions Carried Forward
+### 1.2 Scope
 
-| Decision | Source | Value |
-|----------|--------|-------|
-| Primary interface | PRD.md | Mobile-first (React Native); voice-first |
-| Wake word | SYSTEM_DESIGN.md | "Hey Alex" (Porcupine on-device) |
-| LLM | SYSTEM_DESIGN.md | Claude claude-sonnet-4-20250514 with tool use |
-| Confirmation model | PRD.md US-1.4 | Required for irreversible/high-impact actions |
-| Contact resolution | SYSTEM_DESIGN.md 4.5.3 | Fuzzy match → context → ask if ambiguous |
-| Latency target | PRD.md | ≤ 2 seconds voice-to-first-response |
-| WhatsApp API | SYSTEM_DESIGN.md | Meta Business API (official) |
-| Draft by default | SYSTEM_DESIGN.md 4.5.1 | Email draft preview for first-time contacts |
+This document covers ten core user flows that together represent the full functional surface of Alex v1.0 as defined in PRD.md. It does not cover administrative flows (account deletion, billing management) or v1.1 features (multi-user, mobile, CRM integrations). Onboarding is treated as a first-class flow because the decisions made during setup — AI mode selection, directory configuration, calendar authorisation — shape every subsequent interaction.
 
-### 1.3 Flow Notation
+### 1.3 Notation
+
+All flows in this document use a consistent ASCII notation:
 
 ```
-[TRIGGER]       — What starts the flow
-[STEP]          — An action taken (by user or Alex)
-<DECISION>      — A conditional branch point
-[OUTCOME ✓]     — Successful end state
-[OUTCOME ✗]     — Failed end state
-[RECOVERY]      — How the user gets back on track
-───►            — Normal flow direction
-- - ►           — Error / alternative path
+[TRIGGER]       — the event that starts the flow (user action, scheduled job, external event)
+[STEP]          — a processing step performed by the system or the user
+<DECISION>      — a branching point with two or more possible outcomes
+{OUTCOME}       — a terminal state (success, failure, or waiting for input)
+-->             — forward progression
+--> [Y] / [N]   — branch taken on Yes or No
 ```
 
 ---
@@ -69,62 +61,17 @@ This document is the source of truth for frontend engineers, UX designers, and Q
 
 ### 2.1 First-Time User Experience
 
-```
-Install App
-    │
-    ▼
-[Onboarding: Welcome Screen]
-    │
-    ▼
-[Grant Permissions: Mic, Notifications]
-    │
-    ▼
-[Connect Accounts: Gmail → Google Calendar → Google Drive]
-    │
-    ▼
-[Optional: Connect WhatsApp Business]
-    │
-    ▼
-[Set Preferences: Name, Wake Time, Working Hours, Tone]
-    │
-    ▼
-[File Indexing Begins] (background)
-    │
-    ▼
-[Alex Introduction: Voice demo — "Hey Alex, what can you do?"]
-    │
-    ▼
-[Home Screen — Ready to use]
-```
+A new user arrives at Alex either via the web dashboard URL (Vercel deployment) or by running the stack locally with Docker Compose. They have not authenticated, connected any services, or configured any directories. The system presents a linear onboarding sequence that collects the minimum required configuration to make Alex operational.
 
-**Time to first value:** < 5 minutes from install to first meaningful interaction.
+The critical first-session path is: **account creation → AI mode selection → voice setup → directory configuration → calendar authorisation → email setup → WhatsApp setup → first command**. Each step after account creation is individually completable and skippable, so users who do not have a WhatsApp account or who do not want calendar access can proceed without blocking.
 
----
+At the end of onboarding, Alex delivers a short spoken greeting and runs a live test command — "What do I have on today?" — to demonstrate end-to-end functionality before the user issues their first real command.
 
-### 2.2 Returning User — Daily Experience Arc
+### 2.2 Returning User Experience
 
-```
-07:00 AM  ──►  [Push notification: "Your morning briefing is ready"]
-                    │
-                    ▼
-               [User opens app or says "Hey Alex"]
-                    │
-                    ▼
-               [Morning Briefing plays via TTS]
-                    │
-                    ▼
-               [User acts on briefing items or dismisses]
-                    │
-──────────────────────────────────────────────────────────
-Throughout day:
-    ├── "Hey Alex, [voice command]"   ──► Voice Command Flow
-    ├── Open app → type query         ──► Text Command Flow
-    ├── Calendar reminder fires       ──► Pre-meeting prep notification
-    └── Meeting ends                  ──► Meeting summary pushed
-──────────────────────────────────────────────────────────
-11:00 PM  ──►  [Background job: Consolidate day's memory]
-               [Prepare next morning's briefing data]
-```
+A returning user who has completed onboarding arrives at the dashboard already authenticated (Supabase Auth JWT stored in the browser, refreshed automatically). If the user has voice enabled, Porcupine's wake word detection is active immediately upon page load. If the user configured a morning briefing, Alex checks whether the briefing for the current day has been delivered and, if not, offers to deliver it.
+
+The returning user's primary interaction loop is: **wake word or text input → intent parsed → plan confirmed or auto-executed → result delivered via voice and dashboard update**. This loop is designed to require zero navigation — the user never needs to open a menu or locate a button to accomplish routine tasks.
 
 ---
 
@@ -134,1186 +81,1137 @@ Throughout day:
 
 ### 3.1 Onboarding Flow
 
-**Trigger:** User installs Alex app for the first time.
-**Goal:** User has all accounts connected and Alex is ready to use within 5 minutes.
+**Trigger:** User visits the Alex dashboard for the first time (no authenticated session present).
+
+**Purpose:** Collect the minimum configuration required for Alex to be operational, establish the user's AI mode preference, and demonstrate a working end-to-end command before session close.
 
 #### 3.1.1 Happy Path
 
 ```
-[INSTALL APP]
-      │
-      ▼
-┌─────────────────────────────────────────────┐
-│  SCREEN 1: Welcome                          │
-│  "Hi, I'm Alex — your personal AI OS."     │
-│  [Get Started]                              │
-└──────────────────────┬──────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────┐
-│  SCREEN 2: Permissions                      │
-│  Request: Microphone access                 │
-│  Request: Notifications                     │
-│  Request: Background app refresh            │
-└──────────────────────┬──────────────────────┘
-                       │
-              <All granted?>
-              /           \
-           YES              NO
-            │               │
-            │         [Explain why needed]
-            │         [Re-request]
-            │               │
-            └───────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────┐
-│  SCREEN 3: Connect Google Account           │
-│  [Connect Gmail + Calendar + Drive]         │
-│  → OAuth 2.0 consent screen                 │
-│  → Scopes: gmail.send, gmail.readonly,      │
-│    calendar.events, drive.readonly          │
-└──────────────────────┬──────────────────────┘
-                       │
-              <Auth successful?>
-              /              \
-           YES                NO
-            │                 │
-            │          [Show error + retry]
-            │                 │
-            └─────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────┐
-│  SCREEN 4: Connect WhatsApp (Optional)      │
-│  "Link your WhatsApp number"                │
-│  [Connect WhatsApp] or [Skip for now]       │
-└──────────────────────┬──────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────┐
-│  SCREEN 5: Personal Preferences             │
-│  • Your name: [text field]                  │
-│  • Wake-up time: [time picker, default 7AM] │
-│  • Working hours: [start] to [end]          │
-│  • Tone: Formal / Balanced / Casual         │
-│  [Save & Continue]                          │
-└──────────────────────┬──────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────┐
-│  SCREEN 6: Indexing                         │
-│  "Scanning your files in the background"    │
-│  ████████░░ 80% — this takes ~2 minutes     │
-│  [Continue to Alex →]                       │
-└──────────────────────┬──────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────┐
-│  SCREEN 7: Quick Demo                       │
-│  Alex speaks: "Try saying Hey Alex,         │
-│  what's on my calendar today?"              │
-│  [Microphone animates] → user speaks        │
-│  → Alex responds with today's events        │
-└──────────────────────┬──────────────────────┘
-                       │
-                       ▼
-              [HOME SCREEN — READY ✓]
+[USER VISITS DASHBOARD — NO SESSION]
+        |
+        v
+[Display: Welcome screen + "Get Started" CTA]
+        |
+        v
+[STEP 1: Account Creation]
+  User enters email + password
+  OR clicks "Continue with Google"
+        |
+        v
+  <Supabase Auth: credentials valid?>
+        |
+       [Y]------------------------------------------------[N]
+        |                                                  |
+        v                                                  v
+  [JWT issued, session started]              {Show error: "Invalid credentials.
+        |                                     Try again or reset password."}
+        v
+[STEP 2: AI Mode Selection]
+  Display: "How should Alex think?"
+  Option A: Free Mode (local AI — works offline, no API cost)
+  Option B: Paid Mode (Claude / GPT-4o — faster, smarter)
+        |
+        v
+  <User selects mode>
+        |
+   [Free Mode]----------------------------[Paid Mode]
+        |                                      |
+        v                                      v
+  [Save: ai_mode = "free"]        [Prompt: Enter Anthropic or
+  [Check: Ollama reachable?]       OpenAI API key]
+        |                                      |
+  <Ollama available?>              [Encrypt key → Supabase secrets]
+       [Y]       [N]                           |
+        |         |                    [Save: ai_mode = "paid"]
+        v         v                            |
+  [Confirm]  [Warn: "Ollama         [Test API key validity]
+              not detected.                    |
+              Alex will run              <Key valid?>
+              in text-only                [Y]     [N]
+              mode until               [Cont.]  [Show error +
+              Ollama starts."]                    re-prompt]
+        |
+        v
+[STEP 3: Voice Setup]
+  Display: "Set up your wake word"
+  Default: "Hey Alex"
+  Option: Skip voice setup
+        |
+        v
+  <User clicks "Test Wake Word">
+  [Browser requests microphone permission]
+        |
+  <Permission granted?>
+       [Y]                    [N]
+        |                      |
+        v                      v
+  [Play test prompt]    [Warn: "Microphone access
+  [User says            denied. Voice features
+   "Hey Alex"]          will be unavailable.
+        |                You can enable them later
+  <Wake word             in Settings."]
+  detected?>                   |
+   [Y]       [N]               v
+    |         |          [Skip voice setup]
+    v         v
+[Confirm  [Retry prompt
+ voice     up to 3x,
+ active]   then offer skip]
+        |
+        v
+[STEP 4: Directory Configuration]
+  Display: "Which folders should Alex watch?"
+  User selects one or more local directories
+  (Default suggestion: ~/Documents, ~/Desktop)
+        |
+        v
+  [Save watched_dirs to preferences]
+  [Trigger background file indexing job via Celery]
+  [Display: "Indexing started — this runs in the background"]
+        |
+        v
+[STEP 5: Google Calendar (Optional)]
+  Display: "Connect Google Calendar?"
+        |
+  <User clicks "Connect">
+        |
+        v
+  [OAuth 2.0 redirect → Google consent screen]
+        |
+  <User grants access?>
+       [Y]                    [N / Skip]
+        |                          |
+        v                          v
+  [Store refresh token       [Mark calendar as
+   in Supabase secrets]       not connected]
+  [Run initial calendar sync] [User can connect later
+  [Confirm: "Calendar          in Settings]
+   connected successfully"]
+        |
+        v
+[STEP 6: Email Setup (Optional)]
+  Display: "Connect your email?"
+  User enters: email address, SMTP/IMAP credentials
+        |
+  <User provides credentials>
+        |
+        v
+  [Test IMAP connection]
+        |
+  <Connection successful?>
+       [Y]                    [N / Skip]
+        |                          |
+        v                          v
+  [Encrypt credentials]      [Show error details +
+  [Store in Supabase]         offer retry or skip]
+  [Confirm connected]
+        |
+        v
+[STEP 7: WhatsApp Setup (Optional)]
+  Display: "Connect WhatsApp via Twilio?"
+  User enters Twilio Account SID + Auth Token
+  OR clicks "Skip for now"
+        |
+        v
+  [Validate Twilio credentials]
+        |
+  <Valid?>
+   [Y]         [N / Skip]
+    |                |
+    v                v
+  [Save to     [Mark WhatsApp
+   Supabase]    not connected]
+  [Confirm]
+        |
+        v
+[STEP 8: Onboarding Complete]
+  Display: "Alex is ready."
+  Alex speaks (TTS): "Hi, I'm Alex. Let's get started.
+                      Ask me anything."
+  Auto-run demo command: "What do I have on today?"
+        |
+        v
+  [Alex reads from calendar + tasks + reminders]
+  [Delivers first real response]
+        |
+        v
+{ONBOARDING COMPLETE — DASHBOARD ACTIVE}
 ```
 
-#### 3.1.2 Error Paths
+#### 3.1.2 Error Path Summary
 
-```
-PERMISSION DENIED (Microphone)
-    │
-    ▼
-Alex shows banner: "Alex needs microphone access for voice commands.
-                    Text mode is still available."
-    │
-    ▼
-Settings icon in header → Deep-links to iOS/Android app settings
-    │
-    ▼
-User grants → mic activates immediately (no restart needed)
-
-─────────────────────────────────────────────────────────
-
-GOOGLE AUTH FAILS
-    │
-    ▼
-"Couldn't connect your Google account. Please try again."
-[Retry] [Contact Support]
-    │
-    ▼
-On retry → fresh OAuth flow started
-On 3rd failure → "Try again later. You can reconnect from Settings."
-    │
-    ▼
-User proceeds without Google → text-only mode, limited features
-    │
-    ▼
-Banner persists on home screen: "Connect Google to unlock full features"
-```
+If Google Calendar, email, or WhatsApp setup fails, onboarding is not blocked. The user proceeds to the dashboard with those integrations marked as "Not Connected" and a persistent banner offering to complete setup at any time. AI mode defaults to free if Ollama is unreachable; paid mode re-attempts connection on the next command if Ollama remains down.
 
 ---
 
 ### 3.2 Voice Command Flow
 
-**Trigger:** User says "Hey Alex" or taps the microphone button.
-**Goal:** Alex hears the command, understands intent, executes the correct action, and responds within ≤ 2 seconds.
+**Trigger:** User says "Hey Alex" (wake word) OR types a message in the dashboard chat input.
+
+**Purpose:** Accept a user command, parse intent, plan execution, confirm if necessary, and return a response — all within the 2-second latency target for short commands.
 
 #### 3.2.1 Happy Path
 
 ```
-[USER SAYS "HEY ALEX"] or [TAPS MIC BUTTON]
-      │
-      ▼
-[Porcupine detects wake word on-device]
-      │
-      ▼
-[Microphone activates — UI shows waveform animation]
-      │
-      ▼
-[USER SPEAKS COMMAND]
-"Find the Q3 report and email it to Arjun"
-      │
-      ▼
-[Deepgram streams audio → partial transcript shown live in UI]
-      │
-      ▼
-[Silence detected → final transcript locked]
-      │
-      ▼
-[Context assembled: system prompt + user profile + last 10 turns]
-      │
-      ▼
-[Claude API called with tools — streaming enabled]
-      │
-      ▼
-<Claude determines intent>
-      │
-      ├──► Single action needed → execute tool → stream response
-      │
-      └──► Multi-step needed → create plan → Automation Engine
-      │
-      ▼
-[TOOL EXECUTED] (e.g., search_files + send_email)
-      │
-      ▼
-[Claude streams final response text]
-      │
-      ▼
-[ElevenLabs TTS streams audio — first chunk in ≤ 400ms]
-      │
-      ▼
-[USER HEARS RESPONSE]
-"Done — I found the Q3 Sales Report and emailed it to
- Arjun at arjun@company.com."
-      │
-      ▼
-[Conversation turn saved to Redis + Supabase]
-      │
-      ▼
-[UI: transcript + response shown in chat history]
-      │
-      ▼
-[READY FOR NEXT COMMAND ✓]
+[TRIGGER: Wake word detected by Porcupine]
+  OR
+[TRIGGER: User types message in dashboard]
+        |
+        v
+<Input source?>
+  [Voice]                          [Text]
+     |                                |
+     v                                v
+[STT: faster-whisper              [Text accepted directly —
+ transcribes audio]                no STT step]
+[Confidence score attached]
+     |
+     v
+[Dashboard: show "Listening..." indicator]
+     |
+     v
+[POST /api/v1/command]
+  { input: "text", source: "voice"|"text", session_id }
+        |
+        v
+[INTENT PARSER]
+  AI Model Router called with:
+  - prompt template (see AI Instructions Document)
+  - user text
+  - session context (last 5 turns from pgvector)
+        |
+        v
+  <ambiguity_score > 0.4?>
+       [Y]                              [N]
+        |                               |
+        v                               v
+  [Generate one                  [Intent object produced]
+   clarifying question]
+  [TTS: speak the question]
+  [Dashboard: show question]
+  [Wait for user response]
+  [Re-run intent parser with
+   clarified input]
+        |
+        v
+[TASK PLANNER]
+  Decomposes intent into ordered steps
+        |
+        v
+  <confirmation_required?>
+       [Y]                              [N]
+        |                               |
+        v                               v
+  [Build human-readable         [Execute immediately]
+   plan preview]
+  [TTS: "Here's what I'll do: ...
+   Should I go ahead?"]
+  [Dashboard: show plan
+   with step list]
+  [Wait for user: "Yes" / "No"]
+        |
+  <User confirms?>
+   [Yes]          [No / Cancel]
+     |                  |
+     v                  v
+  [Execute]     {CANCELLED — "No problem.
+                 Let me know if you'd
+                 like to change anything."}
+        |
+        v
+[AUTOMATION ENGINE executes each step]
+  [WebSocket: push progress events to dashboard]
+  [Dashboard: show step completion in real time]
+        |
+        v
+[ALL STEPS COMPLETE]
+  [TTS: speaks result]
+  [Dashboard: updates relevant panel]
+  [Write to audit_logs]
+  [Store interaction in pgvector memory]
+        |
+        v
+{SUCCESS — response delivered via voice + dashboard}
 ```
 
-#### 3.2.2 Low-Confidence Intent Path
+#### 3.2.2 Error Path
 
 ```
-[AMBIGUOUS COMMAND]: "Send it to him"
-      │
-      ▼
-<Claude confidence < threshold?>
-      │
-      YES
-      ▼
-Alex asks ONE clarifying question:
-"Send what to whom? I don't have a recent file or
- contact in context."
-      │
-      ▼
-[User clarifies] → flow resumes from intent resolution
-```
-
-#### 3.2.3 Error Path
-
-```
-[STT FAILS / No audio detected]
-      │
-      ▼
-Alex: "I didn't catch that — could you say it again?"
-      │
-      ▼
-[Mic re-activates — user speaks again]
-      │
-      ▼
-[On 2nd failure] → "Having trouble hearing you.
-                   You can type your request instead."
-      │
-      ▼
-[Text input field highlighted]
-
-─────────────────────────────────────────────────────────
-
-[CLAUDE API TIMEOUT / ERROR]
-      │
-      ▼
-Alex: "I'm having a moment — give me a second."
-[Spinner shown — retry in background, max 2 retries]
-      │
-      ├── Retry succeeds → continues normally
-      │
-      └── All retries fail →
-          "Sorry, I couldn't process that right now.
-           Try again in a moment." [Retry button shown]
+[STT confidence < 0.6]
+        |
+        v
+[TTS: "I didn't catch that — could you repeat?"]
+[Retry STT up to 2 times]
+        |
+  <Still low confidence after retries?>
+       [Y]
+        v
+[TTS: "I'm having trouble hearing you.
+       You can also type your request."]
+{FALLBACK TO TEXT INPUT}
 ```
 
 ---
 
 ### 3.3 File Search & Send Flow
 
-**Trigger:** User requests to find a file, optionally followed by sending it.
-**Goal:** Correct file retrieved in ≤ 3 seconds; optionally sent to a contact.
+**Trigger:** User issues a command referencing a file, e.g. "Find the Q1 proposal" or "Send Priya the contract."
 
-#### 3.3.1 Happy Path — Find Only
+**Purpose:** Locate the correct file from the indexed directories and either present it, attach it to a message, or deliver it via the next action in the plan.
 
-```
-[TRIGGER]: "Find the proposal I sent to Priya last month"
-      │
-      ▼
-[Claude calls: search_files("proposal Priya last month")]
-      │
-      ▼
-[Query embedded → pgvector cosine similarity search]
-      │
-      ▼
-<Results found?>
-      │
-      YES (score > 0.75)
-      ▼
-[Top 3 results returned with name, date, preview]
-      │
-      ▼
-<1 clear top result (score gap > 0.15)?> 
-      │
-      ├── YES → Alex presents top result directly:
-      │          "Found it — 'Priya_Consulting_Proposal_Feb2026.pdf'
-      │           Last modified Feb 14. Want me to open or send it?"
-      │
-      └── NO (multiple similar scores) →
-              Alex shows list:
-              "I found 3 files that might match:
-               1. Priya_Proposal_Feb2026.pdf
-               2. Client_Proposal_Draft_v2.pdf
-               3. Priya_Consulting_Brief.docx
-               Which one?"
-      │
-      ▼
-[User selects or confirms]
-      │
-      ▼
-[FILE FOUND ✓] — shown in chat with name + preview + [Open] [Send] buttons
-```
-
-#### 3.3.2 Happy Path — Find & Send
+#### 3.3.1 Happy Path
 
 ```
-[TRIGGER]: "Find the Q3 report and send it to Arjun on WhatsApp"
-      │
-      ▼
-[search_files executed] → file found
-      │
-      ▼
-<Contact resolved?>
-      │
-      ├── YES (Arjun → single match in contacts) →
-      │       [send_whatsapp called with file attachment]
-      │       → Sent ✓
-      │       Alex: "Done — Q3 Sales Report sent to Arjun on WhatsApp."
-      │
-      └── NO (multiple Arjuns) →
-              "Which Arjun? I have Arjun Mehta (+91 98xxx) 
-               and Arjun Sharma (arjun@co.com)."
-              User picks → send proceeds
-      │
-      ▼
-[SENT ✓] — logged in sent_messages table
+[TRIGGER: File reference detected in intent]
+  e.g. "Find the Q1 proposal"
+        |
+        v
+[FILE SEARCH ENGINE]
+  Step 1 — Keyword search (PostgreSQL FTS)
+    Query: file name, extension, date filters
+    Returns: ranked candidates
+        |
+        v
+  Step 2 — Semantic re-rank (pgvector)
+    Embed query with all-MiniLM-L6-v2
+    Cosine similarity against file_index embeddings
+    Returns: top 5 results with similarity scores
+        |
+        v
+  <Top result score >= 0.85?>
+       [Y]                              [N]
+        |                               |
+        v                               v
+  [Auto-select file]            [Present top 3 candidates
+  [Proceed with plan]            to user]
+                                 [Dashboard: show file list
+                                  with names + dates]
+                                 [TTS: "I found a few matches.
+                                  Which one did you mean?
+                                  1. Q1_Report_2026.pdf
+                                  2. Q1_Draft_v2.docx
+                                  3. Q1_Proposal_Final.pdf"]
+                                        |
+                                        v
+                                 [User selects by number
+                                  or by name]
+                                        |
+                                        v
+                                 [Proceed with selected file]
+        |
+        v
+<Destination action in plan?>
+        |
+   [Present only]   [Attach to email]  [Send via WhatsApp]
+        |                  |                    |
+        v                  v                    v
+[Dashboard:         [Pass file path      [Pass file path
+ show file info      to Email            to WhatsApp
+ + download link]    Send Flow]          Send Flow]
+        |
+        v
+{FILE LOCATED AND ACTION DISPATCHED}
 ```
 
-#### 3.3.3 Error Path — File Not Found
+#### 3.3.2 Error Path
 
 ```
-[search_files returns 0 results or all scores < 0.5]
-      │
-      ▼
-Alex: "I couldn't find a file matching 'Q3 report' in your
-       Google Drive. A few possibilities:
-       • The file might not be indexed yet
-       • Try a different description
-       Want me to search again with different terms?"
-      │
-      ├── User rephrases → new search
-      │
-      └── [Re-index now] button → triggers background re-index
-          Alex: "Re-indexing your Drive. I'll let you know
-                 when it's ready — usually takes 2-3 minutes."
+<No files found matching query?>
+        |
+        v
+[TTS: "I couldn't find a file matching that description.
+       Could you give me more details — like the file name
+       or when you last worked on it?"]
+[Dashboard: show search input for manual refinement]
+        |
+        v
+  <User provides more detail?>
+   [Y]                    [N]
+    |                      |
+    v                      v
+  [Re-run search]    {CANCELLED — "No problem.
+                      Let me know if you'd like
+                      to try a different search."}
+
+<Watched directory has changed and file no longer exists?>
+        |
+        v
+[TTS: "I found a reference to that file, but it seems
+       to have been moved or deleted."]
+[Trigger re-index of watched directory]
+{FLOW ENDED — user informed}
 ```
 
 ---
 
 ### 3.4 Email Send Flow
 
-**Trigger:** User asks Alex to send an email, with or without an attachment.
-**Goal:** Email drafted, optionally reviewed, and sent via Gmail API.
+**Trigger:** User issues an email command, e.g. "Email Rohan the meeting summary" or "Send a follow-up to Priya."
 
-#### 3.4.1 Happy Path — Known Contact, No Attachment
+**Purpose:** Compose, optionally attach files, resolve the recipient, confirm, and dispatch the email via Resend (transactional API) or SMTP.
 
-```
-[TRIGGER]: "Email Arjun and tell him the presentation is ready 
-            for tomorrow's meeting"
-      │
-      ▼
-[Claude calls: send_email tool]
-      │
-      ▼
-[Contact resolved: Arjun → arjun@company.com (known, frequent)]
-      │
-      ▼
-[Claude drafts email]:
-  Subject: "Presentation Ready for Tomorrow's Meeting"
-  Body: "Hi Arjun, just a quick note to let you know
-         the presentation is ready for tomorrow. 
-         Let me know if you need anything. Best, [User]"
-      │
-      ▼
-<Is this a known/frequent contact?>
-      │
-      YES → skip preview (auto-send mode)
-      ▼
-[Gmail API → email sent]
-      │
-      ▼
-Alex: "Email sent to Arjun — subject: 'Presentation Ready
-       for Tomorrow's Meeting'."
-      │
-      ▼
-[SENT ✓] — logged
-```
-
-#### 3.4.2 Happy Path — New Contact (Draft Preview Required)
+#### 3.4.1 Happy Path
 
 ```
-[TRIGGER]: "Email Dr. Sharma about the invoice"
-      │
-      ▼
-[Contact resolved: dr.sharma@clinic.in (first time emailing)]
-      │
-      ▼
-[Claude drafts email]
-      │
-      ▼
-<First-time contact?> → YES
-      │
-      ▼
-[DRAFT PREVIEW shown in UI]:
-┌─────────────────────────────────────────────────────┐
-│  To: dr.sharma@clinic.in                           │
-│  Subject: Invoice for [Service Name]               │
-│  ─────────────────────────────────────             │
-│  Dear Dr. Sharma,                                  │
-│  Please find the invoice attached for...           │
-│                                                    │
-│  [Edit]  [Send ✓]  [Cancel ✗]                      │
-└─────────────────────────────────────────────────────┘
-      │
-      ├── [Send ✓] → Gmail API → Sent ✓
-      │              Alex: "Sent to Dr. Sharma."
-      │
-      ├── [Edit] → User edits inline → [Send] button
-      │
-      └── [Cancel] → Alex: "Okay, I've discarded that draft.
-                            Let me know if you want to try again."
-```
-
-#### 3.4.3 Happy Path — With File Attachment
-
-```
-[TRIGGER]: "Email the contract to Priya with a note that it's 
-            ready for her signature"
-      │
-      ▼
-[PARALLEL EXECUTION]:
-  ├── search_files("contract") → finds "Client_Contract_Priya.pdf"
-  └── Contact resolved: priya@consulting.in
-      │
-      ▼
-<User confirm attach correct file?>
-      │
-      ▼
-Alex: "Found 'Client_Contract_Priya.pdf'. Should I attach
-       that one?"  [Yes] [Different file]
-      │
-      YES
-      ▼
-[Email drafted + file attached as Google Drive link]
-      │
-      ▼
-<Known contact?> → show/skip preview → Gmail API → Sent ✓
-```
-
-#### 3.4.4 Error Path
-
-```
-[GMAIL API FAILS]
-      │
-      ▼
-Alex: "Couldn't send the email right now — Gmail returned
-       an error. Should I try again or save it as a draft 
-       in your Gmail?"
-      │
-      ├── [Try Again] → retry × 2
-      │
-      └── [Save as Draft] → Gmail API createDraft → 
-          "Saved as a draft in your Gmail."
+[TRIGGER: email intent detected]
+  e.g. "Email Rohan the meeting summary"
+        |
+        v
+[CONTACT RESOLUTION]
+  Fuzzy match "Rohan" against contacts table
+        |
+        v
+  <Match confidence?>
+  [Single match > 0.9]   [Multiple matches]    [No match]
+         |                      |                   |
+         v                      v                   v
+  [Resolve to         [TTS: "Did you mean    [TTS: "I don't
+   rohan@email.com]    Rohan Mehta or         have Rohan's
+                        Rohan Sharma?"]        email. What is
+                       [User clarifies]        it?"]
+                            |                  [User provides]
+                            v                  [Save to contacts?
+                       [Proceed with            Optional]
+                        confirmed contact]           |
+                                                     v
+                                               [Proceed with
+                                                provided email]
+        |
+        v
+[CONTENT RESOLUTION]
+  <Attachment referenced?>
+       [Y]                              [N]
+        |                               |
+        v                               v
+  [Run File Search Flow          [No attachment —
+   (§3.3) to locate file]         text-only email]
+  [Attach resolved file]
+        |
+        v
+[COMPOSE EMAIL]
+  AI Model Router generates:
+  - Subject line (inferred from context)
+  - Body (using user's preferred tone from preferences)
+  - Attachment included if resolved
+        |
+        v
+[CONFIRMATION GATE]
+  Dashboard: show email preview
+    - To: rohan@email.com
+    - Subject: "Meeting Summary — 25 March 2026"
+    - Body: [generated text]
+    - Attachment: meeting_summary.pdf (if any)
+  TTS: "Here's the email to Rohan.
+        Want me to send it?"
+        |
+        v
+  <User confirms?>
+   [Yes]                    [No — modify]
+     |                           |
+     v                           v
+  [Dispatch via Resend      [TTS: "What would you
+   or SMTP]                  like to change?"]
+  [Wait for delivery         [User specifies edit]
+   confirmation]             [Re-generate + re-confirm]
+        |
+        v
+  <Delivery confirmed?>
+   [Y]                    [N]
+    |                      |
+    v                      v
+[TTS: "Done.           [TTS: "The email
+ Email sent            failed to send.
+ to Rohan."]           I'll retry once."]
+[Dashboard:            [Celery retry task
+ update sent log]       queued]
+        |                      |
+        v               <Retry successful?>
+{SUCCESS}                [Y]        [N]
+                          |          |
+                          v          v
+                      {SUCCESS}  {FAILURE —
+                                  user notified,
+                                  email saved
+                                  as draft}
 ```
 
 ---
 
 ### 3.5 WhatsApp Message Flow
 
-**Trigger:** User asks Alex to send a WhatsApp message or file.
-**Goal:** Message sent via Meta Business API within the 24-hour window rules.
+**Trigger:** User issues a WhatsApp command, e.g. "Send Priya the Q1 report on WhatsApp."
 
-#### 3.5.1 Happy Path — Within 24h Window
+**Purpose:** Resolve the recipient's WhatsApp ID, optionally attach a file, confirm the message, and dispatch via Twilio.
 
-```
-[TRIGGER]: "WhatsApp Priya and tell her the meeting is moved 
-            to 4 PM"
-      │
-      ▼
-[Contact resolved: Priya → +91 9800000000]
-      │
-      ▼
-<Last message to/from Priya on WhatsApp within 24h?>
-      │
-      YES → freeform message allowed
-      ▼
-[Claude drafts message]:
-  "Hey Priya, just wanted to let you know the meeting has 
-   been moved to 4 PM. See you then! 👍"
-      │
-      ▼
-<Apply tone preference? Casual (set in memory)> → YES
-      │
-      ▼
-[Meta Business API → message sent]
-      │
-      ▼
-Alex: "Sent to Priya on WhatsApp."
-      │
-      ▼
-[SENT ✓] — logged + message status webhook registered
-```
-
-#### 3.5.2 Outside 24h Window (Template Required)
+#### 3.5.1 Happy Path
 
 ```
-[TRIGGER]: "WhatsApp the client about the invoice"
-      │
-      ▼
-<Last WhatsApp interaction > 24 hours ago?>
-      │
-      YES → freeform blocked by Meta policy
-      ▼
-Alex: "I can't send a freeform WhatsApp message to this 
-       contact right now — it's been more than 24 hours 
-       since your last exchange. 
-       Options:
-       1. Send via email instead
-       2. Use an approved message template
-       Which would you prefer?"
-      │
-      ├── [Email instead] → routes to Email Send Flow
-      │
-      └── [Use template] → Alex selects best-fit approved template
-                        → User confirms → sent via template API
-```
-
-#### 3.5.3 File Attachment via WhatsApp
-
-```
-[TRIGGER]: "Send the Q3 report to Arjun on WhatsApp"
-      │
-      ▼
-[search_files + contact resolve run in parallel]
-      │
-      ▼
-<File size ≤ 100MB (Meta limit)?>
-      │
-      ├── YES → file attached as document
-      │         Alex: "Sent Q3 Sales Report to Arjun on WhatsApp."
-      │
-      └── NO → "That file is too large to send directly on WhatsApp 
-                (limit: 100MB). Want me to:
-                1. Share the Google Drive link instead
-                2. Email it to Arjun"
+[TRIGGER: WhatsApp intent detected]
+  e.g. "Send Priya the Q1 report on WhatsApp"
+        |
+        v
+<WhatsApp connected (Twilio configured)?>
+   [Y]                         [N]
+    |                           |
+    v                           v
+[Proceed]              [TTS: "WhatsApp isn't
+                         set up yet. Want me
+                         to help you connect it?"]
+                       [Offer Settings shortcut]
+                       {FLOW PAUSED}
+        |
+        v
+[CONTACT RESOLUTION — WhatsApp ID]
+  Match "Priya" against contacts.whatsapp_id
+        |
+        v
+  <WhatsApp ID known?>
+   [Y]                         [N]
+    |                           |
+    v                           v
+  [Proceed]             [TTS: "I don't have
+                          Priya's WhatsApp number.
+                          What is it?"]
+                         [User provides]
+                         [Save to contacts]
+        |
+        v
+<File attachment referenced?>
+   [Y]                         [N]
+    |                           |
+    v                           v
+[Run File Search        [Text-only message]
+ Flow (§3.3)]
+[Encode as media
+ attachment]
+        |
+        v
+[CONFIRMATION GATE]
+  Dashboard: show message preview
+    - To: Priya (+91-XXXXXXXXXX)
+    - Content: file name or message text
+  TTS: "Sending the Q1 report to Priya on WhatsApp.
+        Shall I go ahead?"
+        |
+        v
+  <User confirms?>
+   [Yes]               [No]
+     |                   |
+     v                   v
+  [Twilio API       {CANCELLED}
+   dispatch]
+  [Receive message
+   SID confirmation]
+        |
+        v
+  <Twilio delivery confirmed?>
+   [Y]                    [N]
+    |                      |
+    v                      v
+[TTS: "Done.          [TTS: "WhatsApp delivery
+ Sent to Priya."]      failed. I'll retry shortly."]
+[Log to audit_logs]   [Celery retry with backoff]
+        |
+        v
+{SUCCESS}
 ```
 
 ---
 
 ### 3.6 Calendar Booking Flow
 
-**Trigger:** User asks to check availability, create an event, or reschedule.
-**Goal:** Correct event created in Google Calendar with attendees notified.
+**Trigger:** User issues a scheduling command, e.g. "Book a one-hour call with Priya next Tuesday afternoon."
 
-#### 3.6.1 Happy Path — Book a Meeting
+**Purpose:** Parse the time reference, check availability against the user's Google Calendar, resolve any conflicts, confirm the booking details, and create the event.
 
-```
-[TRIGGER]: "Book a 1-hour call with Priya next Thursday afternoon"
-      │
-      ▼
-[get_calendar("Thursday", free-busy)]
-      │
-      ▼
-[Free slots returned: 1 PM, 3 PM, 4 PM on Thursday]
-      │
-      ▼
-<More than one slot available?>
-      │
-      YES
-      ▼
-Alex: "You're free at 1 PM, 3 PM, or 4 PM next Thursday.
-       Which works?"
-      │
-      ▼
-[User: "3 PM is fine"]
-      │
-      ▼
-[create_event called]:
-  Title: "Call with Priya"
-  Start: Thursday 3:00 PM
-  End:   Thursday 4:00 PM
-  Attendees: priya@consulting.in
-  Video link: Google Meet (auto-generated)
-      │
-      ▼
-[Google Calendar API → event created + invite sent to Priya]
-      │
-      ▼
-Alex: "Done — 1-hour call with Priya booked for Thursday 
-       at 3 PM. She'll get a calendar invite."
-      │
-      ▼
-[EVENT CREATED ✓] — shown in chat with [View Event] button
-```
-
-#### 3.6.2 Happy Path — Check Availability
+#### 3.6.1 Happy Path
 
 ```
-[TRIGGER]: "When am I free tomorrow afternoon?"
-      │
-      ▼
-[get_calendar("tomorrow", user only)]
-      │
-      ▼
-[Free slots identified: 2:00–3:30 PM, 5:00–6:00 PM]
-      │
-      ▼
-Alex: "Tomorrow afternoon you have two free windows: 
-       2:00–3:30 PM and 5:00–6:00 PM. 
-       Want me to book something?"
-      │
-      ▼
-[INFORMATION DELIVERED ✓] — no action unless user requests
-```
-
-#### 3.6.3 Reschedule Flow
-
-```
-[TRIGGER]: "Move my 2 PM meeting tomorrow to Thursday"
-      │
-      ▼
-[get_calendar("tomorrow") → finds "Investor Update — 2:00 PM"]
-      │
-      ▼
-<Correct event identified?>
-      │
-      YES → Alex: "Moving 'Investor Update' from tomorrow 2 PM
-                   to Thursday — confirm?"
-      │
-      [Confirm] ─────►  [get_calendar("Thursday", free-busy)]
-                               │
-                        <Slot available at 2 PM Thursday?>
-                        /                    \
-                      YES                     NO
-                       │                      │
-              [update event →          "You have a conflict
-               attendees notified]      at 2 PM Thursday.
-               Alex: "Done —            How about 3 PM or 4 PM?"
-               rescheduled."            → User picks → update
-```
-
-#### 3.6.4 Error Path — Conflict
-
-```
-[TRIGGER]: "Book a meeting with Arjun Tuesday at 10 AM"
-      │
-      ▼
-[get_calendar → Tuesday 10 AM has "Team Standup"]
-      │
-      ▼
-Alex: "You already have 'Team Standup' at 10 AM on Tuesday.
-       Want me to find another time, or book it anyway?"
-      │
-      ├── [Find another time] → Alex suggests next free slot
-      │
-      └── [Book anyway] → double-booking confirmed by user → created
+[TRIGGER: Calendar booking intent detected]
+  e.g. "Book a 1-hour call with Priya next Tuesday afternoon"
+        |
+        v
+<Google Calendar connected?>
+   [Y]                         [N]
+    |                           |
+    v                           v
+[Proceed]               [TTS: "Google Calendar
+                          isn't connected.
+                          Want to connect it now?"]
+                         [Offer OAuth flow shortcut]
+                         {FLOW PAUSED}
+        |
+        v
+[TEMPORAL ENTITY EXTRACTION]
+  Parse: "next Tuesday afternoon"
+  Resolve to: 2026-03-31, 12:00 PM – 6:00 PM window
+  Duration: 60 minutes
+        |
+        v
+[AVAILABILITY CHECK]
+  Query cached calendar_events table
+  Find free 60-minute slots within the time window
+        |
+        v
+  <Free slots found?>
+   [Y: 1 slot]       [Y: multiple slots]      [N: fully booked]
+        |                     |                        |
+        v                     v                        v
+  [Proceed with        [TTS: "I found 3         [TTS: "Tuesday
+   that slot]           slots on Tuesday         afternoon looks
+                         afternoon:              fully booked.
+                         1. 1:00 PM – 2:00 PM    How about
+                         2. 3:00 PM – 4:00 PM    Wednesday
+                         3. 4:30 PM – 5:30 PM    morning?"]
+                         Which works best?"]    [Suggest next
+                        [User selects slot]      available window]
+        |
+        v
+[CONTACT RESOLUTION — attendee email]
+  Resolve "Priya" to priya@email.com
+        |
+        v
+[CONFIRMATION GATE]
+  Dashboard: show event preview
+    - Title: "Call with Priya"
+    - Date: Tuesday, 31 March 2026
+    - Time: 1:00 PM – 2:00 PM
+    - Attendees: priya@email.com
+    - Calendar invite: will be sent
+  TTS: "I'll book a 1-hour call with Priya on Tuesday
+        at 1 PM and send her an invite. Shall I?"
+        |
+        v
+  <User confirms?>
+   [Yes]                    [No — modify]
+     |                           |
+     v                           v
+  [Google Calendar         [User specifies change]
+   events.insert()]         [Re-plan + re-confirm]
+  [Send invite to Priya]
+  [Cache new event]
+        |
+        v
+[TTS: "Done. Call with Priya booked for Tuesday at 1 PM.
+       She's been sent an invite."]
+[Dashboard: update calendar panel]
+        |
+        v
+{SUCCESS}
 ```
 
 ---
 
 ### 3.7 Task & Reminder Flow
 
-**Trigger:** User asks to create, view, update, or complete a task or reminder.
-**Goal:** Task stored with correct due date, surfaced at the right time.
+**Trigger:** User sets a task or reminder verbally or via text, e.g. "Remind me to follow up with Arjun tomorrow at 10 AM" or "Add a task: review the proposal by Friday."
 
-#### 3.7.1 Create Task / Reminder
+**Purpose:** Parse the task or reminder details, store them, and trigger delivery at the specified time.
 
-```
-[TRIGGER]: "Remind me to follow up with Arjun on Friday at 9 AM"
-      │
-      ▼
-[create_task called]:
-  title: "Follow up with Arjun"
-  due_at: Friday 09:00 AM
-  related_contact: Arjun
-  context: "Follow-up from conversation on [today's date]"
-      │
-      ▼
-[Task saved to Supabase tasks table]
-      │
-      ▼
-[Notification scheduled for Friday 9:00 AM]
-      │
-      ▼
-Alex: "Got it — I'll remind you to follow up with Arjun
-       this Friday at 9 AM."
-      │
-      ▼
-[TASK CREATED ✓]
-
-──────── At Friday 9:00 AM ────────────────────────────────
-[Push notification]: "Reminder: Follow up with Arjun"
-    │
-    ▼
-[User opens notification → Alex shows context]
-Alex: "You wanted to follow up with Arjun today. 
-       Want me to send him an email or WhatsApp now?"
-    │
-    ├── [Yes, email] → routes to Email Send Flow
-    ├── [Yes, WhatsApp] → routes to WhatsApp Flow
-    └── [Dismiss] → task marked snoozed (re-surfaces in 2 hours)
-```
-
-#### 3.7.2 View Tasks
+#### 3.7.1 Task Creation — Happy Path
 
 ```
-[TRIGGER]: "What are my pending tasks?" 
-      │
-      ▼
-[get_tasks(status="pending") + get_tasks(status="overdue")]
-      │
-      ▼
-Alex: "You have 5 pending tasks:
-       OVERDUE:
-        • Email invoice to client (was due Monday)
-       DUE TODAY:
-        • Review Priya's proposal (due 5 PM)
-       UPCOMING:
-        • Call Arjun re: funding (Thursday)
-        • Submit expenses (Friday)
-        • Prepare Q3 deck (next week)"
-      │
-      ▼
-[Each task shown as tappable card in UI]
+[TRIGGER: Task/reminder intent detected]
+  e.g. "Remind me to call Arjun tomorrow at 10 AM"
+        |
+        v
+[ENTITY EXTRACTION]
+  Action:    "call Arjun"
+  Trigger:   "tomorrow at 10 AM"
+  Resolved:  2026-03-26 10:00:00 IST
+  Type:      reminder (time-based trigger)
+        |
+        v
+[NO CONFIRMATION REQUIRED for simple reminders]
+  [INSERT into reminders table]
+  [Celery Beat schedules delivery job]
+        |
+        v
+[TTS: "Got it. I'll remind you to call Arjun
+       tomorrow at 10 AM."]
+[Dashboard: reminder appears in upcoming list]
+        |
+        v
+{SUCCESS — REMINDER STORED}
 ```
 
-#### 3.7.3 Complete / Update Task
+#### 3.7.2 Reminder Delivery — Happy Path
 
 ```
-[TRIGGER]: "Mark the Priya proposal task as done"
-      │
-      ▼
-[get_tasks → matches "Review Priya's proposal"]
-      │
-      ▼
-[PATCH /tasks/:id { status: "completed" }]
-      │
-      ▼
-Alex: "Done — 'Review Priya's proposal' marked as complete."
-      │
-      ▼
-[Task moves to completed list ✓]
+[TRIGGER: Celery Beat fires at 2026-03-26 10:00:00]
+        |
+        v
+[Load reminder from database]
+  message: "Call Arjun"
+  trigger_at: 10:00 AM
+        |
+        v
+<Dashboard open / user active?>
+   [Y]                         [N]
+    |                           |
+    v                           v
+[WebSocket push:          [Web push notification:
+ "Reminder: Call Arjun"]   "Alex: Call Arjun"]
+[TTS: "Just a reminder —
+ you wanted to call Arjun."]
+        |
+        v
+[Update reminder status → "triggered"]
+[Dashboard: move to "Past Reminders"]
+        |
+        v
+<Reminder has repeat setting?>
+   [Y: daily/weekly]             [N]
+    |                             |
+    v                             v
+[Schedule next                {DONE}
+ occurrence in
+ Celery Beat]
+```
+
+#### 3.7.3 Overdue Task Escalation
+
+```
+[TRIGGER: Celery Beat daily overdue check (midnight)]
+        |
+        v
+[Query: tasks WHERE due_date < NOW() AND status != 'completed']
+        |
+        v
+  <Overdue tasks found?>
+   [Y]                    [N]
+    |                      |
+    v                      v
+[Update status          {NO ACTION}
+ → 'overdue']
+[Add to next morning
+ briefing as priority items]
+[Web push if user active:
+ "You have X overdue tasks"]
+        |
+        v
+{ESCALATION LOGGED}
 ```
 
 ---
 
 ### 3.8 Morning Briefing Flow
 
-**Trigger:** Scheduled job at configured wake time (default 7:00 AM) OR user asks "Hey Alex, give me my briefing."
-**Goal:** User receives a complete, prioritized daily briefing via voice and text.
+**Trigger:** Celery Beat fires at user's configured briefing time (default: 7:30 AM) OR user says "Give me my morning briefing."
 
-#### 3.8.1 Auto-Delivery Happy Path
+**Purpose:** Aggregate the day's schedule, pending tasks, overdue items, and priority inbox emails into a concise spoken and visual briefing.
 
-```
-[07:00 AM — SCHEDULED JOB FIRES (BullMQ)]
-      │
-      ▼
-[PARALLEL DATA FETCH]:
-  ├── Google Calendar → today's events
-  ├── Tasks DB → pending + overdue tasks
-  ├── Gmail → unread important messages (last 12h)
-  └── Memory → active projects, recent context
-      │
-      ▼
-[Claude generates briefing] (background, ~10s)
-      │
-      ▼
-[Briefing stored in Supabase briefings table]
-      │
-      ▼
-[TTS audio generated for briefing text]
-      │
-      ▼
-[PUSH NOTIFICATION SENT]:
-  "🌅 Good morning! Your briefing is ready."
-      │
-      ▼
-[User opens notification or app]
-      │
-      ▼
-[BRIEFING PLAYS VIA TTS]:
-
-"Good morning. It's Tuesday, March 24th.
- 
- You have 3 meetings today: Team standup at 9 AM,
- Investor call at 2 PM, and a 1-on-1 with Priya at 5 PM.
-
- 2 tasks are overdue: the client invoice and the Q3 report.
- I'd suggest handling those before the investor call.
-
- You have 4 unread emails that may need attention — 
- including a reply from Arjun about the contract.
-
- Your top 3 priorities today look like:
- 1. Review and send the client invoice
- 2. Prepare for the investor call
- 3. Reply to Arjun about the contract.
-
- Shall I help with any of these now?"
-
-      │
-      ▼
-<User responds?>
-      │
-      ├── YES, voice/text → Briefing transitions to live conversation
-      │                     Alex handles the request directly
-      │
-      └── NO response → Briefing ends, chat history saved
-                        User can replay later: [Play Again] button
-```
-
-#### 3.8.2 On-Demand Briefing
+#### 3.8.1 Happy Path
 
 ```
-[TRIGGER]: "Hey Alex, give me my briefing"
-      │
-      ▼
-<Today's briefing already generated?>
-      │
-      ├── YES → plays cached briefing immediately
-      │
-      └── NO → "Generating your briefing now — 
-                 takes about 10 seconds..."
-                 → data fetch + generate → play
+[TRIGGER: Celery Beat @ configured briefing time]
+  OR
+[TRIGGER: User says "Morning briefing" / "What's on today?"]
+        |
+        v
+[BRIEFING COMPOSER — data aggregation]
+  Query 1: tasks WHERE due_date = TODAY OR status = 'overdue'
+  Query 2: reminders WHERE trigger_at BETWEEN NOW AND NOW+24h
+  Query 3: calendar_events WHERE start_time BETWEEN NOW AND END OF DAY
+  Query 4: IMAP SEARCH FLAGGED OR UNSEEN (last 12 hours, priority inbox)
+        |
+        v
+  <Any data available across queries?>
+   [Y]                         [N]
+    |                           |
+    v                           v
+[Send all data to          [TTS: "Your schedule
+ AI Model Router]           looks clear today.
+ Prompt: "Generate a        No tasks, reminders,
+ concise morning            or priority emails.
+ briefing…"]                Enjoy your day."]
+        |
+        v
+[Model returns structured briefing text]
+  Format:
+  - Greeting + date
+  - Today's calendar events (chronological)
+  - Due tasks (priority-sorted)
+  - Overdue items (if any — flagged prominently)
+  - Priority emails (sender + subject only)
+  - One smart suggestion (if memory/preferences support it)
+        |
+        v
+[TTS: speak full briefing]
+[Dashboard: render briefing in "Today" panel]
+[Mark briefing as delivered for today]
+        |
+        v
+  <User asks follow-up question during briefing?>
+   [Y]                         [N]
+    |                           |
+    v                           v
+[Handle as new Voice        {BRIEFING COMPLETE}
+ Command Flow (§3.2)
+ with briefing context
+ retained in session]
 ```
 
-#### 3.8.3 Error Path — Data Fetch Failure
+#### 3.8.2 Error Path
 
 ```
-[Calendar API fails during briefing generation]
-      │
-      ▼
-Alex generates partial briefing with available data:
-"Your briefing is ready, though I couldn't connect 
- to your calendar right now. 
- 
- Based on tasks and emails:
- You have 3 pending tasks, including [overdue items]...
- 
- I'll show your calendar events once I reconnect."
-      │
-      ▼
-[Retry calendar API in background]
-[Push update notification when calendar data loads]
+<Calendar API returns error during data aggregation?>
+        |
+        v
+[Log error to Sentry]
+[Proceed with available data (tasks + reminders)]
+[Append to briefing: "Note: Calendar data is
+ temporarily unavailable."]
+
+<IMAP connection fails?>
+        |
+        v
+[Proceed without inbox data]
+[Append to briefing: "I couldn't check your email
+ this morning — you may want to check it manually."]
 ```
 
 ---
 
 ### 3.9 Meeting Transcription Flow
 
-**Trigger:** User says "Hey Alex, start transcribing" OR event starts and Alex sends pre-meeting prompt.
-**Goal:** Full meeting transcript + summary + action items delivered within 2 minutes of meeting end.
+**Trigger:** User says "Alex, start transcribing" or clicks "Start Meeting" in the dashboard while in a meeting.
 
-#### 3.9.1 Happy Path — Full Flow
+**Purpose:** Capture ongoing audio, transcribe it in near-real-time, generate a structured summary with action items on request, and optionally create tasks from extracted action items.
 
-```
-[TRIGGER]: "Hey Alex, start transcribing"
-      │
-      ▼
-Alex: "Transcription started. I'll capture everything
-       and send you a summary when you're done."
-      │
-      ▼
-[Deepgram streaming activated — real-time transcription begins]
-      │
-      ▼
-[UI: live transcript scrolls in real time]
-      │
-      ▼
-[MEETING IN PROGRESS — audio streamed continuously]
-      │
-      ▼
-[TRIGGER]: "Hey Alex, stop transcribing" 
-           OR user taps [End Meeting] button
-      │
-      ▼
-[Deepgram stream closed — final transcript saved]
-      │
-      ▼
-[BACKGROUND JOB (BullMQ)]:
-  │
-  ├── Claude generates summary (key discussion points)
-  ├── Claude extracts action items
-  │     "1. Arjun to send revised contract by Friday
-  │      2. Priya to review Q3 numbers by Wednesday
-  │      3. Follow up with investor next week"
-  └── Action items → auto-created as tasks (with owner = user)
-      │
-      ▼
-[PUSH NOTIFICATION — ~90 seconds after meeting ends]:
-"Meeting summary ready — 3 action items captured."
-      │
-      ▼
-[User opens → sees]:
-┌─────────────────────────────────────────────────────┐
-│  Meeting Summary — March 24, 2026, 2:00 PM          │
-│  Duration: 47 minutes                               │
-│                                                     │
-│  KEY POINTS                                         │
-│  • Discussed Q3 revenue targets...                  │
-│  • Contract revision agreed upon...                 │
-│                                                     │
-│  ACTION ITEMS                                       │
-│  ☐ Send revised contract (Arjun, by Friday)         │
-│  ☐ Review Q3 numbers (Priya, by Wednesday)          │
-│  ☐ Follow up with investor (You, next week)         │
-│                                                     │
-│  [Share Summary] [View Full Transcript] [Edit]      │
-└─────────────────────────────────────────────────────┘
-      │
-      ▼
-<Share summary with attendees?>
-      │
-      ├── [Share Summary] → Alex: "Send to all meeting 
-      │                      attendees?" [Yes] [Select people]
-      │                      → emails sent with summary
-      │
-      └── [Dismiss] → Summary saved; tasks added to task list
-```
-
-#### 3.9.2 Pre-Meeting Prep (Proactive)
+#### 3.9.1 Happy Path
 
 ```
-[10 MINUTES BEFORE CALENDAR EVENT]
-[Automation Engine scheduled job fires]
-      │
-      ▼
-<Event has attendees in contacts?>
-      │
-      YES
-      ▼
-Alex sends notification:
-"Investor Call in 10 minutes.
- Last interaction with Arjun: March 18 (email re: contract)
- Relevant files: Q3_Report.pdf, Investor_Deck_v3.pdf
- [Open files] [Dismiss]"
+[TRIGGER: "Start meeting transcription"]
+        |
+        v
+[REQUEST microphone permission if not already granted]
+        |
+        v
+  <Permission available?>
+   [Y]                         [N]
+    |                           |
+    v                           v
+[Begin audio capture]    [TTS: "Microphone access
+[Dashboard: show          is required for transcription.
+ "Recording" indicator    Please enable it in your
+ with elapsed time]       browser settings."]
+        |                 {FLOW BLOCKED}
+        v
+[STT: faster-whisper processes audio in 30-second chunks]
+[Each chunk transcribed and appended to live transcript]
+[Dashboard: transcript panel updates in real time via WebSocket]
+        |
+        v
+[TRIGGER: User says "Stop transcribing" or clicks "End Meeting"]
+        |
+        v
+[Save raw transcript to Supabase Storage]
+[Save transcript path to meetings table]
+        |
+        v
+[SUMMARISATION]
+  Send full transcript to AI Model Router
+  Prompt: extract —
+    - Meeting title (inferred)
+    - Key decisions
+    - Action items (with assignees where mentioned)
+    - Attendees (detected from transcript)
+        |
+        v
+[Model returns structured summary JSON]
+[Save summary + action_items to meetings table]
+[Dashboard: show summary in "Meeting" panel]
+        |
+        v
+  <Action items extracted?>
+   [Y]                         [N]
+    |                           |
+    v                           v
+[TTS: "I found 3 action   {SUMMARY DISPLAYED —
+ items. Want me to add     NO TASKS CREATED}
+ them as tasks?"]
+        |
+  <User confirms?>
+   [Yes]                    [No]
+     |                        |
+     v                        v
+  [INSERT each action   {TASKS NOT CREATED —
+   item into tasks        summary still saved}
+   table with
+   source = 'meeting']
+  [TTS: "Done. 3 tasks
+   added to your list."]
+        |
+        v
+{MEETING FLOW COMPLETE}
 ```
 
 ---
 
 ### 3.10 Multi-Step Task Flow
 
-**Trigger:** User gives a compound instruction requiring 3+ actions across different tools.
-**Goal:** All steps executed in correct order, with real-time progress updates and graceful error handling.
+**Trigger:** User issues a compound command that requires more than one action to complete, e.g. "Find the ACME contract, summarise it, and email it to Rohan with a note saying I'll call him Thursday."
 
-#### 3.10.1 Happy Path — Full Multi-Step
+**Purpose:** Demonstrate Alex's core autonomous execution capability — decomposing a complex instruction into an ordered plan, executing each step in sequence, passing outputs between steps, and recovering gracefully if any step fails.
 
-```
-[TRIGGER]: "Schedule a call with Priya for Thursday, 
-            send her the contract on WhatsApp, and 
-            remind me to prepare talking points 
-            Wednesday night at 8 PM"
-      │
-      ▼
-[Claude parses intent → creates Automation Plan]:
-┌─────────────────────────────────────────────────────┐
-│  PLAN: plan_abc123                                  │
-│  Step A: get_calendar(Thursday) → find free slot    │
-│  Step B: create_event(Priya, best slot) [← A]      │
-│  Step C: search_files("contract")                   │
-│  Step D: send_whatsapp(Priya, contract) [← C]      │
-│  Step E: create_task("Prepare talking points",      │
-│          due=Wednesday 8 PM) [independent]         │
-└─────────────────────────────────────────────────────┘
-      │
-      ▼
-Alex: "I'll handle all of that — working on it now."
-[UI: progress tracker appears with 5 steps]
-      │
-      ▼
-[STEP A EXECUTES]: get_calendar
-  → Thursday free at 2 PM, 4 PM ✓
-      │
-      ▼
-[STEP B EXECUTES]: create_event (uses Step A result)
-  → "Call with Priya" Thursday 2 PM created
-  → Calendar invite sent to Priya ✓
-      │
-      ▼
-[STEPS C + E EXECUTE IN PARALLEL]:
-  C: search_files("contract") 
-     → "Client_Contract_Priya.pdf" found ✓
-  E: create_task("Prepare talking points", Wed 8 PM)
-     → Task created ✓
-      │
-      ▼
-[STEP D EXECUTES]: send_whatsapp (uses Step C result)
-  → Contract PDF sent to Priya on WhatsApp ✓
-      │
-      ▼
-[ALL STEPS COMPLETE]
-      │
-      ▼
-Alex: "All done:
-       ✓ Call with Priya booked — Thursday at 2 PM
-       ✓ Contract sent to Priya on WhatsApp
-       ✓ Reminder set — Wednesday at 8 PM to prep talking points"
-      │
-      ▼
-[COMPLETE ✓] — all actions logged
-```
-
-#### 3.10.2 Partial Failure Path
+#### 3.10.1 Happy Path
 
 ```
-[STEP B FAILS]: Calendar API timeout while creating event
-      │
-      ▼
-[Retry B × 2 — still fails]
-      │
-      ▼
-[Step D depends on B — paused]
-[Steps C and E continue independently]
-      │
-      ▼
-Alex (mid-execution update):
-"Quick update — I had trouble booking the calendar slot for 
- Priya (Google Calendar isn't responding). 
- 
- I've completed:
- ✓ Contract sent to Priya on WhatsApp
- ✓ Reminder set for Wednesday at 8 PM
- ✗ Meeting not booked yet
- 
- Should I try booking the meeting again?"
-      │
-      ├── [Retry] → Step B retried → succeeds → plan_abc123 completes
-      │
-      └── [Skip] → plan marked partially complete, user notified
+[TRIGGER: Multi-step command issued]
+  Input: "Find the ACME contract, summarise it, and
+          email it to Rohan with a note saying
+          I'll call him Thursday"
+        |
+        v
+[INTENT PARSER]
+  Produces intent object:
+  {
+    intent: "multi_step_task",
+    steps: [
+      { action: "file_search",  query: "ACME contract" },
+      { action: "summarise",    input: "{{step_1_result}}" },
+      { action: "send_email",   to: "Rohan",
+        attach: "{{step_1_result}}",
+        body_context: "I'll call him Thursday",
+        summary: "{{step_2_result}}" }
+    ],
+    requires_confirmation: true
+  }
+        |
+        v
+[TASK PLANNER — dependency graph]
+  Step 1: file_search (no deps)
+  Step 2: summarise (depends on step 1)
+  Step 3: send_email (depends on step 1 + step 2)
+        |
+        v
+[CONFIRMATION GATE — plan preview shown]
+  Dashboard:
+  ┌─────────────────────────────────────────┐
+  │  Alex's Plan                            │
+  │  ─────────────────────────────────────  │
+  │  Step 1 ○  Search for "ACME contract"  │
+  │  Step 2 ○  Summarise the document      │
+  │  Step 3 ○  Email to Rohan with summary │
+  │             + attachment               │
+  │                                         │
+  │  [Go ahead]          [Cancel]           │
+  └─────────────────────────────────────────┘
+  TTS: "Here's my plan. Should I go ahead?"
+        |
+        v
+  <User confirms?>
+   [Yes]                    [No]
+     |                        |
+     v                        v
+  [Execute]            {CANCELLED}
+        |
+        v
+[STEP 1: File Search]
+  File Search Flow (§3.3)
+  Result: /docs/ACME_Contract_2026.pdf
+  Status: ✓ Complete
+  [WebSocket: push step 1 complete event to dashboard]
+        |
+        v
+[STEP 2: Summarise]
+  Send document text to AI Model Router
+  Prompt: "Summarise this contract in 3–5 sentences
+           focusing on key obligations and deadlines"
+  Result: "The ACME contract covers... [summary text]"
+  Status: ✓ Complete
+  [WebSocket: push step 2 complete event]
+        |
+        v
+[STEP 3: Send Email]
+  Email Send Flow (§3.4) — with pre-resolved inputs:
+    - recipient: rohan@email.com (resolved in step 1)
+    - attachment: ACME_Contract_2026.pdf
+    - body includes: summary text + "I'll call Thursday"
+  [No second confirmation — overall plan already confirmed]
+  Status: ✓ Complete
+  [WebSocket: push step 3 complete event]
+        |
+        v
+[TTS: "All done. I found the ACME contract,
+       summarised it, and emailed it to Rohan
+       with a note about Thursday's call."]
+[Dashboard: all steps marked complete]
+[Write to audit_logs]
+[Embed interaction in pgvector memory]
+        |
+        v
+{MULTI-STEP FLOW COMPLETE}
+```
+
+#### 3.10.2 Error Path — Mid-Plan Failure
+
+```
+[STEP 2 FAILS: AI Model Router timeout]
+        |
+        v
+[Automation Engine catches ActionError]
+[Stop execution — do NOT proceed to step 3]
+        |
+        v
+[TTS: "I completed step 1 — the contract is found —
+       but I hit an error generating the summary.
+       Step 3 (the email) hasn't been sent.
+       Would you like me to retry the summary,
+       skip it and send the file without a summary,
+       or cancel the whole thing?"]
+[Dashboard: show partial plan with failure state
+  Step 1 ✓  Contract found
+  Step 2 ✗  Summary failed — [Retry] [Skip] [Cancel]
+  Step 3 ○  Email — waiting]
+        |
+        v
+  <User choice?>
+  [Retry]       [Skip step 2]     [Cancel]
+     |                |                |
+     v                v                v
+  [Re-run         [Proceed to     {CANCELLED —
+   step 2]         step 3 with     steps 1 was
+  [If success →    file only,      completed;
+   continue        no summary]     no email sent}
+   to step 3]
 ```
 
 ---
 
 ## 4.0 Edge Cases & Error Handling
 
-### 4.1 Master Error Handling Matrix
+### 4.1 System-Level Failures
 
-| Error Type | When It Occurs | Alex's Response | Recovery Path |
-|------------|---------------|-----------------|---------------|
-| **Mic not detected** | Voice command attempt | "I can't access your microphone. Check app permissions." | Deep-link to device settings |
-| **STT failure (no transcript)** | Deepgram drops connection | "I didn't catch that — try again or type it." | Mic reactivates; text fallback offered |
-| **Ambiguous intent** | Unclear command | Asks ONE clarifying question | User clarifies; flow resumes |
-| **Contact not found** | Unknown name in command | "I don't have [name] in your contacts. Can you give me their email/number?" | User provides → stored in contacts |
-| **Multiple contacts match** | Common name | Lists matches, asks user to pick | User selects → action proceeds |
-| **File not found** | Search returns < 0.5 score | "No matching file found. Try rephrasing or re-indexing." | Rephrase / trigger re-index |
-| **Email send failure** | Gmail API error | "Couldn't send — save as draft instead?" | Retry or save draft |
-| **WhatsApp 24h window expired** | Outside window | Suggests email or template | User chooses alternative |
-| **WhatsApp file too large** | > 100MB file | Offers Drive link or email alternative | User picks alternative |
-| **Calendar conflict** | Event already booked at slot | Shows conflict, suggests alternatives | User picks new slot |
-| **Claude API timeout** | LLM takes > 5s | "Give me a moment…" spinner → retry × 2 | Queue request; notify when done |
-| **Google auth expired** | OAuth token revoked | "Your Google account needs to be reconnected." | Re-auth flow from Settings |
-| **WhatsApp API rate limit** | Too many messages sent | "I need to wait a minute before sending more WhatsApp messages." | Auto-retry after cooldown |
-| **Automation step fails** | Mid-plan tool error | Reports partial completion; asks to retry failed step | Retry individual step |
-| **No internet connection** | Network offline | "I'm offline. Voice and text work locally; actions need internet." | Auto-resumes when reconnected |
-| **Briefing generation fails** | All APIs down at 7 AM | Partial briefing with available data + error note | Retry on first user open |
+The table below documents every significant failure mode across the system, the user-facing message, and the recovery path.
 
-### 4.2 Graceful Degradation by Feature
+| Failure | User-Facing Message | Recovery Path |
+|---------|-------------------|---------------|
+| Ollama offline (free mode) | "My AI brain seems to be sleeping. I'll try again in a moment." | Retry 3x with 5s backoff; if still unreachable, prompt to check Ollama status in Settings |
+| Paid API key invalid or rate-limited | "There was an issue reaching the AI service. Switching to free mode temporarily." | Fallback to free mode; persist paid mode setting; retry next command with paid mode |
+| PostgreSQL connection lost | "I'm having trouble accessing my memory right now." | FastAPI returns 503; Celery tasks paused; retry on reconnect via connection pool |
+| Supabase Storage unreachable | "I couldn't access file storage at the moment." | Log to Sentry; complete non-storage steps; notify user of partial completion |
+| Celery worker down | Background tasks (reminders, indexing, briefings) stop firing | Sentry alert sent; Railway auto-restarts worker service; queued tasks execute on restart |
+| SMTP delivery failure | "The email failed to send. I'll try once more." | Single automatic retry after 60 seconds; if second failure, save as draft and notify |
+| Twilio API error | "WhatsApp delivery failed. I'll retry shortly." | Celery retry with exponential backoff (60s, 5m, 30m); notify user after third failure |
+| Google Calendar API auth expiry | "Your calendar connection has expired." | Prompt to re-authorise OAuth; briefings and scheduling proceed without calendar data |
+| STT confidence below threshold | "I didn't quite catch that — could you repeat?" | Retry up to 2 times; offer text fallback on third failure |
+| Wake word false positive | User can say "Stop" or "Never mind" at any time | Interrupt handler cancels active flow; system returns to listening state |
+| File index corruption | Search returns no results for known files | Trigger full re-index of watched directories; notify user via dashboard banner |
 
-```
-FULL CAPABILITIES (All connected)
-    Gmail ✓ + WhatsApp ✓ + Drive ✓ + Calendar ✓
-    → All 11 features fully operational
+### 4.2 Contact Resolution Failures
 
-─────────────────────────────────────────────
-PARTIAL: Gmail only (no WhatsApp)
-    → File search ✓, Email ✓, Calendar ✓
-    → WhatsApp flows → redirect to email
+When a contact cannot be resolved, Alex never silently drops the action. It always informs the user of the resolution failure and requests the minimum information needed to proceed — typically a full name, email address, or phone number. Newly provided contact information is offered for saving to the contacts table to prevent the same failure in future sessions.
 
-─────────────────────────────────────────────
-PARTIAL: No Google Drive (only Gmail + Calendar)
-    → Communication ✓, Calendar ✓
-    → File search → "Drive not connected. Connect in Settings."
+### 4.3 Timeout Handling
 
-─────────────────────────────────────────────
-MINIMAL: No internet
-    → Voice recognition: ✗ (requires Deepgram)
-    → Text input: ✓ (queued, executes on reconnect)
-    → Local task list: ✓ (SQLite)
-    → Briefing: read cached version only
-```
+Long-running steps (AI inference in free mode, large file indexing, lengthy meeting transcription) display a progress indicator in the dashboard and a "still working…" voice prompt after 8 seconds. If a step exceeds 60 seconds, Alex notifies the user and offers to continue waiting or cancel. No step is silently abandoned.
+
+### 4.4 Confirmation Timeout
+
+If a confirmation prompt is presented and the user does not respond within 60 seconds, the plan is cancelled automatically and a brief notification is shown. This prevents unintended email sends or calendar bookings from executing after the user has walked away from the dashboard.
 
 ---
 
 ## 5.0 Confirmation & Permission Flows
 
-### 5.1 Auto-Act vs. Ask-First Rules
+### 5.1 When Alex Always Confirms Before Acting
 
-The following matrix defines exactly when Alex acts immediately and when it pauses for user confirmation.
+The following actions are always gated behind an explicit user confirmation regardless of command source, AI mode, or prior user preferences:
 
-| Action | Auto-Act | Ask First | Condition |
-|--------|----------|-----------|-----------|
-| Send email (known contact) | ✓ | | Contact emailed > 3 times |
-| Send email (new/rare contact) | | ✓ | First time or < 3 prior emails |
-| Send WhatsApp (known contact) | ✓ | | In 24h window; contact messaged > 5 times |
-| Send WhatsApp (new contact) | | ✓ | Always |
-| Send with file attachment | | ✓ | Always — confirm correct file |
-| Create calendar event (solo) | ✓ | | No attendees |
-| Create calendar event (with attendees) | | ✓ | Invites will be sent externally |
-| Reschedule event | | ✓ | Always — affects attendees |
-| Delete event | | ✓ | Always — irreversible |
-| Create task / reminder | ✓ | | Always auto — non-destructive |
-| Mark task complete | ✓ | | If clearly named match |
-| Start meeting transcription | ✓ | | User explicitly triggered |
-| Share meeting summary externally | | ✓ | Sending to attendees |
-| Run multi-step automation | | ✓ | If plan includes ≥1 external send |
-| Set memory preference | ✓ | | Auto-learns from behavior |
-| Override/delete memory | | ✓ | User must explicitly confirm change |
+| Action | Why Confirmation Required |
+|--------|--------------------------|
+| Send any email | Irreversible external communication |
+| Send any WhatsApp message | Irreversible external communication |
+| Create a calendar event with external invitees | Sends invitations to other people |
+| Delete a task or reminder | Data loss; not easily reversible |
+| Execute a plan with 3+ steps | High consequence; user should verify the full sequence |
+| Use a paid AI API for the first time | Cost implication; user must opt in explicitly |
+| Save a new contact's details | Privacy implication |
+| Re-index all watched directories | Potentially long-running operation |
 
-### 5.2 Confirmation UI Patterns
+### 5.2 When Alex Acts Without Asking
 
-#### Standard Confirm (Inline)
-```
-Alex: "Sending this email to Priya at priya@consulting.in —
-       shall I go ahead?"
+The following actions execute automatically without a confirmation prompt, because they are low-consequence, reversible, or explicitly instructed:
 
-  [Yes, send]     [Edit first]     [Cancel]
-```
+| Action | Reason for Auto-Execution |
+|--------|--------------------------|
+| Set a reminder or task | Reversible; user-initiated; no external effect |
+| Retrieve and display file search results | Read-only; no external effect |
+| Read calendar events or inbox | Read-only; no external effect |
+| Generate and display a meeting summary | No external effect; user has already requested it |
+| Cache calendar sync or file index updates | Background system maintenance |
+| Deliver a morning briefing | User has pre-authorised this at a specific time |
+| Log command and result to audit_logs | System operation; fully user-visible |
 
-#### File Confirm (With Preview)
-```
-Alex: "Attaching 'Client_Contract_Priya.pdf' — is this the 
-       right file?"
+### 5.3 Modify-and-Confirm Flow
 
-  [Yes, attach it]     [Find a different file]
-```
-
-#### Multi-Action Preview (Before Automation)
-```
-Alex: "Here's my plan — shall I go ahead with all of this?
-
-  1. ☐ Book call with Priya — Thursday 2 PM
-  2. ☐ Send contract to Priya on WhatsApp
-  3. ☐ Set reminder — Wednesday 8 PM
-
-  [Do all of this]     [Edit plan]     [Cancel]"
-```
-
-#### Destructive Action Confirm
-```
-Alex: "Delete 'Investor Update' from your calendar on 
-       Tuesday? This will cancel the meeting and notify 
-       all attendees."
-
-  [Yes, delete it]     [Keep it]"
-```
-
-### 5.3 Permission Escalation Flow
+When a user responds to a confirmation prompt with "No — change X", Alex enters a modify cycle rather than cancelling. The user specifies which element to change (recipient, tone, time, attachment), Alex re-generates the relevant part of the plan, and presents the updated confirmation. The modify cycle repeats as many times as the user needs before a final "yes" or "cancel" is given.
 
 ```
-[ALEX WANTS TO DO SOMETHING IT HASN'T DONE BEFORE]
-e.g., "Send files to an external contact for the first time"
-      │
-      ▼
-Alex: "Just to confirm — I'll be sending files to people
-       outside your usual contacts. Is that okay?"
-  [Yes, always allow this]   [Yes, just this once]   [No]
-      │
-      ▼
-[Choice stored in memory as permission preference]
+[CONFIRMATION PRESENTED]
+        |
+  <User response?>
+  [Yes]       [Modify]           [Cancel]
+    |              |                 |
+    v              v                 v
+[Execute]  [User states change] {CANCELLED}
+            [Alex re-generates]
+            [Re-present confirm]
+            [Loop until Yes or Cancel]
+```
+
+### 5.4 Permission Escalation — First-Time Integrations
+
+The first time Alex attempts to use any external integration (email send, WhatsApp message, calendar event creation), it presents a one-time permission prompt even if the integration was connected during onboarding. This provides a clear moment of informed consent that the integration will be used to perform real-world actions — distinct from the connection-level consent granted during setup.
+
+```
+[FIRST USE OF EMAIL SEND]
+        |
+        v
+[Dashboard: "This is the first time Alex will
+ send an email on your behalf. The email
+ will come from your connected Gmail account.
+ Allow Alex to send emails?"]
+        |
+  <User allows?>
+   [Yes — save preference]   [No — this time only]   [Never — disable]
+            |                         |                       |
+            v                         v                       v
+   [Execute + don't          [Execute once —          [Mark email as
+    ask again]                ask again next time]     disabled in
+                                                       settings]
 ```
 
 ---
 
 ## 6.0 Open Questions
 
-| # | Question | Impact | Needed By |
-|---|----------|--------|-----------|
-| OQ-UF-1 | Should Alex show a live transcript feed on screen during voice commands, or only show the final response? Live transcription is more transparent but may feel noisy. | UX design of voice mode screen | Before frontend build |
-| OQ-UF-2 | For multi-step plans, should Alex always preview the full plan and ask for confirmation, or only ask when a plan contains external sends? | Confirmation flow design § 5.1 | Before automation engine build |
-| OQ-UF-3 | When meeting transcription is active and the user gives a voice command ("Hey Alex, pause"), how does Alex distinguish it from meeting audio? | Voice layer design (separate STT channel needed?) | Before transcription feature build |
-| OQ-UF-4 | Should the morning briefing play automatically on app open, or only on explicit user request / notification tap? | Briefing UX; affects retention | Before briefing feature build |
-| OQ-UF-5 | What happens if the user is mid-conversation and a scheduled job fires (e.g., briefing, overdue task alert)? Queue or interrupt? | Notification + conversation state management | Before scheduling build |
-| OQ-UF-6 | What is the undo/rollback experience? If Alex sends an email by mistake, can the user say "Hey Alex, undo that"? Gmail supports draft recall, but sent messages cannot be recalled after delivery. | User trust and error recovery | Before communication layer build |
+| # | Question | Owner | Resolution Target |
+|---|----------|-------|------------------|
+| UF-OQ-1 | The voice command flow targets a 2-second response latency for short commands in free mode. Given faster-whisper STT (1–3 seconds) + Mistral 7B inference (3–8 seconds), the total pipeline may exceed 2 seconds on modest hardware. Should the latency target be revised, or should the streaming response pattern (return TTS as tokens generate) be implemented from day one? | Engineering / Product | Before backend development begins |
+| UF-OQ-2 | The confirmation timeout is set at 60 seconds. Is this appropriate for all contexts — including voice users who may be moving around and text users who may be reading the plan carefully? Should different timeouts apply to voice vs. text confirmation prompts? | Product | Before frontend development begins |
+| UF-OQ-3 | Meeting transcription currently captures all audio via the browser microphone, which picks up only the local participant's voice on a video call. How should Alex handle remote participants' voices in a video meeting? Options: screen audio capture, Zoom/Meet bot integration, or a clear disclaimer that only the local participant's speech is captured. | Engineering | Before Meeting Copilot development begins |
+| UF-OQ-4 | The multi-step flow shows a plan preview before execution. For returning users who have confirmed similar plans many times, should Alex offer a "Trust Mode" that skips confirmation for low-risk plan types (e.g., file search + email to a known contact)? | Product | Before v1.1 planning |
+| UF-OQ-5 | The morning briefing flow reads "priority inbox" via IMAP. How is a priority email defined? Options: FLAGGED messages only, UNSEEN messages from known contacts, a user-defined keyword filter, or a machine-learning classifier trained on the user's past interactions. | Product / AI | Before AI Instructions Document |
+| UF-OQ-6 | When a file search yields zero results, Alex asks for more detail. Should Alex also proactively suggest triggering a re-index of watched directories, in case the file exists but was indexed before the current session? | Product | Before File Search feature development |
 
 ---
 
 ## 7.0 Next Steps
 
-| # | Action | Owner | Dependency |
-|---|--------|-------|-----------|
-| NS-1 | Resolve OQ-UF-1, OQ-UF-2, OQ-UF-4 — these directly affect screen designs | Product | Before Document 4 (Feature List) |
-| NS-2 | Hand USER_FLOW.md to UX designer to produce wireframes for all 10 flows | UX Designer | After this document |
-| NS-3 | Map all flows in this document to API endpoints defined in SYSTEM_DESIGN.md § 6 | Engineering | Before development |
-| NS-4 | Add edge cases from § 4.1 matrix to QA test plan | QA | Before testing phase |
-| NS-5 | Define all confirmation copy (the exact words Alex uses for confirms) in AI Instructions Document (Doc 7) | Product + AI | During Doc 7 |
-| NS-6 | Begin **Feature List Document** (Document 4) — complete feature breakdown with acceptance criteria | Product | After USER_FLOW sign-off |
+The flows defined in this document are now locked as the canonical reference for user interaction design in Alex v1.0. All ten flows map directly to backend API endpoints and frontend component states.
+
+**Decisions locked by this document:** Confirmation is required for all irreversible external actions (email, WhatsApp, calendar creation with invitees, multi-step plans with 3+ actions). Auto-execution is permitted for all read-only and internally scoped operations. A modify cycle is available at every confirmation prompt. The voice and text input paths converge at the Intent Parser — no separate code path exists for voice vs. text commands.
+
+The remaining documents to author, in order, are:
+
+1. **Feature List Document (v1.0)** — enumerate every feature with acceptance criteria, the specific API endpoints and components involved, and the free-mode vs. paid-mode implementation path. The flows defined here serve as the primary source of acceptance criteria.
+2. **Security Document (v1.0)** — define the credential encryption strategy (Supabase secrets), JWT validation in FastAPI, Row Level Security policies in PostgreSQL, and the action permission model referenced in Section 5.0 of this document.
+3. **AI Instructions Document (v1.0)** — specify the exact prompt templates used by the Intent Parser, Task Planner, Briefing Composer, Meeting Summariser, and email composer — all of which are invoked in the flows documented here.
 
 ---
 
-*All flows in this document are based on PRD.md user stories and SYSTEM_DESIGN.md architecture. Any change to either upstream document must trigger a review of affected flows.*
-
----
-**Document Control**
-
-| Field | Value |
-|-------|-------|
-| Document Name | USER_FLOW.md |
-| Version | v1.0 |
-| Status | Draft |
-| Created | 24 March 2026 |
-| Last Updated | 24 March 2026 |
-| References | GOAL.md, PRD.md v1.0, SYSTEM_DESIGN.md v1.0 |
+*Document maintained by the Alex Build Team. All flows in this document supersede informal interaction descriptions in SYSTEM_DESIGN.md. Version history tracked in the project changelog.*

@@ -22,51 +22,69 @@
 
 ---
 
+
 ## 1.0 Purpose & Scope
 
 ### 1.1 Purpose
 
-This Product Requirements Document defines the full specification for **Alex**, a personal AI Operating System designed to function as an intelligent, autonomous, always-available assistant. Alex is built to understand intent, search across platforms, make decisions, execute multi-step tasks, communicate on behalf of the user, and continuously improve through behavioral learning.
+This Product Requirements Document defines the functional and non-functional requirements for **Alex**, a personal AI Operating System designed to serve as an intelligent, autonomous, and continuously learning assistant. Alex is built to understand, search, decide, act, communicate, and automate real-world tasks on behalf of its user.
 
-Alex is not merely a voice assistant or chatbot — it is an **AI OS layer** that sits on top of the user's digital life, connecting their files, calendar, communications, tasks, and workflows into a single intelligent interface.
+This document serves as the primary reference for the design, development, and validation of Alex v1.0. All downstream technical documents — including the System Design Document, User Flow Document, Feature List, Tech Stack Requirements, Security Document, and AI Instructions Document — must remain consistent with the decisions recorded here.
 
 ### 1.2 Scope
 
-This PRD covers the full product scope of Alex v1.0, including:
+Alex v1.0 covers the following domains:
 
-- All 11 core capability areas defined in GOAL.md
-- Voice and text interaction modes
-- Integrations with email, WhatsApp, calendar, and file systems
-- Memory, personalization, and briefing systems
-- Decision-making and autonomous task execution
+- Voice and text-based conversational assistance
+- Intelligent file search and automated delivery
+- Autonomous multi-step task execution
+- Communication via email and WhatsApp
+- Calendar management and scheduling
+- Meeting transcription and summarization
+- Task and reminder management
+- Intelligent decision-making and intent resolution
+- Smart suggestions and recommendations
+- Memory, personalization, and behavioral learning
+- Daily wake-up briefings
 
-This document serves as the foundation for all subsequent documentation including System Design, User Flows, Feature List, Tech Stack, Security, and AI Instructions documents.
+### 1.3 Hybrid AI Architecture Scope
+
+Alex is designed to operate in **two modes**:
+
+- **Default (Free/Local) Mode:** All core features must be fully functional using free or locally hosted AI models. No paid API dependency for core operation.
+- **Upgrade (Paid API) Mode:** Optional integration with paid APIs (e.g., OpenAI, Claude) that enhances performance but does not alter or replace core functionality. Paid APIs are performance boosters only.
+
+This hybrid model must be reflected consistently across all seven documentation artifacts.
 
 ---
 
 ## 2.0 Problem Statement
 
-### 2.1 What Problems Does Alex Solve?
+### 2.1 Problems Alex Solves
 
-Modern professionals and individuals manage an overwhelming number of tools, platforms, and information streams simultaneously. The core problems Alex addresses are:
+Modern professionals and individuals face a fragmented digital life. They manage multiple applications — calendars, email clients, messaging apps, file systems, task managers — none of which communicate with each other intelligently. The result is cognitive overload, missed tasks, poor information retrieval, and wasted time on repetitive actions.
 
-| # | Problem | Impact |
-|---|---------|--------|
-| 1 | **Fragmentation** — Files, emails, tasks, and calendar live in disconnected apps | Time wasted switching contexts, losing information |
-| 2 | **Reactive workflows** — Users must initiate every action manually | No proactive support; important things get missed |
-| 3 | **Search inefficiency** — Keyword-only search fails to find relevant files/info | Hours lost locating documents or emails |
-| 4 **Communication overhead** — Drafting and sending messages is manual and repetitive | Slows execution, creates bottlenecks |
-| 5 | **Meeting productivity loss** — Notes, summaries, and action items are captured inconsistently or not at all | Follow-through failures, repeated work |
-| 6 | **No daily clarity** — No single system tells users what matters most today | Poor prioritization, missed deadlines |
-| 7 | **Assistant tools don't learn** — Most tools reset context between sessions | Users must repeat preferences and context constantly |
+Specifically, Alex addresses the following pain points:
+
+- **Information fragmentation:** Files, emails, calendar events, and messages live in separate silos. Finding the right information at the right moment requires manual effort.
+- **Repetitive communication tasks:** Composing emails, sending files via WhatsApp, and following up on meetings consumes time that could be automated.
+- **Scheduling inefficiency:** Coordinating availability, suggesting meeting times, and managing reminders remains largely manual.
+- **Meeting blind spots:** Valuable information shared in meetings is lost due to the absence of real-time transcription and summarization.
+- **No unified assistant layer:** Existing tools are reactive and single-function. There is no intelligent layer that connects intent to action across platforms.
+- **High cost of AI assistants:** Most capable AI solutions require paid subscriptions, excluding users who cannot or do not want to incur recurring costs for core functionality.
 
 ### 2.2 Target User
 
-**Primary Target:** Individual professionals, entrepreneurs, founders, and knowledge workers who manage high volumes of communication, tasks, files, and meetings daily.
+Alex is designed for the **individual professional** — someone who manages significant information flow, handles communication across multiple channels, attends recurring meetings, and needs consistent productivity support without the overhead of managing multiple tools.
 
-**Secondary Target:** Small team leads or business owners who want a personal AI layer that handles operations intelligently without requiring a human assistant.
+The primary target user profile:
 
-**Geographic Focus (v1.0):** English-speaking markets; India as launch market given Rishikesh/Indian context.
+- Works independently or in a small team
+- Manages a high volume of communication (email, messaging)
+- Relies heavily on scheduling and calendar coordination
+- Needs quick access to files and documents
+- Values automation but requires control and transparency
+- Is cost-conscious and prefers a free-first approach with optional paid upgrades
 
 ---
 
@@ -76,68 +94,98 @@ Modern professionals and individuals manage an overwhelming number of tools, pla
 
 | # | Goal | Description |
 |---|------|-------------|
-| G1 | **Reduce task execution time** | Alex should complete or initiate multi-step tasks in under 30 seconds via voice or text |
-| G2 | **Centralize daily operations** | All core workflows (email, files, calendar, tasks) accessible through one interface |
-| G3 | **Eliminate repetitive manual actions** | Automate high-frequency, low-complexity tasks entirely |
-| G4 | **Enable proactive intelligence** | Alex surfaces the right information before being asked |
-| G5 | **Build a persistent personal context** | Alex learns and remembers the user's preferences, schedule, and behavior |
-| G6 | **Deliver daily operational clarity** | Every morning, Alex provides a complete, prioritized briefing |
+| G1 | Full functionality in free mode | All 11 core capabilities must work without any paid API dependency |
+| G2 | End-to-end task automation | Alex must complete multi-step tasks from a single voice or text command |
+| G3 | Accurate intent understanding | Alex must correctly resolve user intent across ambiguous or multi-part commands |
+| G4 | Seamless communication | Alex must send emails and WhatsApp messages reliably, with correct attachments |
+| G5 | Persistent memory | Alex must learn and retain user preferences across sessions |
+| G6 | Voice-first interaction | Alex must support real-time voice input and output as the primary interaction mode |
+| G7 | Graceful upgrade path | Switching between free and paid modes must be seamless and non-disruptive |
 
 ### 3.2 Success Metrics
 
-| Metric | Target (90 days post-launch) |
-|--------|------------------------------|
-| Daily Active Usage | User interacts with Alex ≥ 5 times/day |
-| Task Completion Rate | ≥ 85% of initiated tasks completed without error |
-| Voice Recognition Accuracy | ≥ 95% intent recognition accuracy |
-| File Search Success Rate | ≥ 90% correct file retrieved on first query |
-| Morning Briefing Engagement | User opens/listens to briefing ≥ 5 days/week |
-| Memory Accuracy | ≥ 90% of recalled preferences are correct |
-| User Satisfaction (NPS) | NPS ≥ 50 within first 60 days |
-| Latency | Voice-to-action response in ≤ 2 seconds for standard tasks |
+| Metric | Target | Measurement Method |
+|--------|--------|-------------------|
+| Intent accuracy | ≥ 90% correct intent classification | Logged command vs. executed action comparison |
+| Task completion rate | ≥ 85% end-to-end without user re-prompt | Session logs |
+| Voice response latency | < 2 seconds for short commands | Response time measurement |
+| File search success rate | ≥ 95% correct file retrieved | Search result vs. user selection |
+| Email / WhatsApp delivery rate | 100% | Delivery confirmation logs |
+| Calendar booking accuracy | ≥ 98% correct time slot booked | Calendar entry validation |
+| User re-engagement (daily briefing) | ≥ 70% of active users engage daily | Session open rate |
+| Free mode uptime | 100% core features functional without paid APIs | Feature availability audit |
+| Memory retention accuracy | ≥ 80% preference recall after 7 days | Preference test against stored data |
 
 ---
 
 ## 4.0 User Personas
 
-### 4.1 Persona 1 — "The Busy Founder"
+### 4.1 Persona 1 — Arjun, The Independent Consultant
 
-| Attribute | Detail |
-|-----------|--------|
-| **Name** | Arjun |
-| **Age** | 32 |
-| **Role** | Startup Founder / CEO |
-| **Tech Comfort** | High |
-| **Daily Tools** | Gmail, WhatsApp, Google Drive, Notion, Google Calendar |
-| **Pain Points** | Spends 3+ hours/day on email and WhatsApp; forgets to send files; back-to-back meetings leave no time for follow-up |
-| **Goals** | Delegate communication and scheduling to an AI; never miss a follow-up; start every day with clarity |
-| **Alex Use Cases** | Morning briefing, send emails via voice, file search + share, meeting summaries, calendar booking |
+**Age:** 34
+**Location:** Delhi, India
+**Role:** Independent business consultant managing 5–8 clients simultaneously
 
-### 4.2 Persona 2 — "The Solo Consultant"
+**Background:** Arjun handles proposal writing, client communication, file delivery, and meeting scheduling entirely on his own. He works across email, WhatsApp, and Google Calendar and spends a disproportionate amount of time on administrative tasks.
 
-| Attribute | Detail |
-|-----------|--------|
-| **Name** | Priya |
-| **Age** | 29 |
-| **Role** | Independent Business Consultant |
-| **Tech Comfort** | Medium-High |
-| **Daily Tools** | Outlook, WhatsApp, Dropbox, Zoom, Calendly |
-| **Pain Points** | Manually tracks client tasks; loses time finding old proposals and contracts; misses follow-up reminders |
-| **Goals** | Automate client communication, never miss a deadline, have all files at voice command |
-| **Alex Use Cases** | Task & reminder management, file search, send files via WhatsApp/email, smart suggestions for follow-ups |
+**Needs:**
+- Quick file search and WhatsApp delivery without navigating folders manually
+- Automated email drafting and sending for routine communications
+- Meeting summaries with extracted action items
+- A daily briefing to orient himself each morning
 
-### 4.3 Persona 3 — "The Knowledge Worker"
+**Pain Points:**
+- Frequently forgets follow-ups after meetings
+- Wastes 30–45 minutes daily on file retrieval and forwarding tasks
+- Cannot afford enterprise AI tools but needs equivalent productivity
 
-| Attribute | Detail |
-|-----------|--------|
-| **Name** | Rahul |
-| **Age** | 26 |
-| **Role** | Product Manager at a mid-size company |
-| **Tech Comfort** | High |
-| **Daily Tools** | Slack, Jira, Gmail, Zoom, Google Drive |
-| **Pain Points** | Loses track of meeting action items; calendar is always full; spends too long in meetings that yield no outcomes |
-| **Goals** | Auto-capture meeting notes, manage tasks efficiently, get smart briefings on project status |
-| **Alex Use Cases** | Meeting copilot, wake-up briefing, task management, calendar scheduling, decision support |
+**How Alex Helps:** Alex automates file delivery, sends follow-up emails post-meeting, provides daily briefings with pending tasks, and operates entirely in free mode — matching his budget constraints.
+
+---
+
+### 4.2 Persona 2 — Priya, The Startup Founder
+
+**Age:** 29
+**Location:** Bangalore, India
+**Role:** Co-founder of an early-stage startup with a 5-person team
+
+**Background:** Priya juggles product decisions, investor communications, team scheduling, and operational tasks. She moves fast and needs an assistant that can keep up without requiring configuration for each task.
+
+**Needs:**
+- Multi-step task execution from a single command
+- Smart scheduling suggestions when coordinating with investors and team members
+- Meeting transcription and action item extraction
+- Proactive suggestions on follow-ups and priorities
+
+**Pain Points:**
+- Too many tools create context-switching fatigue
+- Manually tracking meeting outcomes and action items is error-prone
+- Needs AI capability but is cautious about recurring API costs during early-stage
+
+**How Alex Helps:** Alex provides a unified interface for scheduling, meeting summaries, and task tracking. Priya can start in free mode and selectively activate paid API upgrades when business scale justifies the cost.
+
+---
+
+### 4.3 Persona 3 — Rohan, The Remote Knowledge Worker
+
+**Age:** 26
+**Location:** Pune, India
+**Role:** Research analyst working remotely for a mid-sized firm
+
+**Background:** Rohan attends multiple video calls daily, produces research reports, and must stay current on deliverables across several ongoing projects. He finds it difficult to stay organized without a reliable system.
+
+**Needs:**
+- Meeting transcription and summary generation
+- Reminder and task tracking integrated with his calendar
+- File search and delivery by voice to save time
+- Preference learning so Alex adapts to his working patterns
+
+**Pain Points:**
+- Important meeting details are often lost or scattered across notes
+- Frequently misses reminders because they live in separate apps
+- Wants an assistant that improves with use, not one that requires constant instruction
+
+**How Alex Helps:** Alex transcribes meetings, generates structured summaries, tracks reminders, and personalizes its behavior over time — reducing Rohan's administrative burden substantially.
 
 ---
 
@@ -145,125 +193,151 @@ Modern professionals and individuals manage an overwhelming number of tools, pla
 
 ### 5.1 Feature Priority Table
 
-| # | Feature | Description | Priority |
-|---|---------|-------------|----------|
-| 1 | **Conversational Voice & Text Assistance** | Real-time voice + text interaction with context retention | **Must Have** |
-| 2 | **Intelligent File Search + Action** | Semantic file search with auto-send via WhatsApp/email | **Must Have** |
-| 3 | **Autonomous Task Execution** | Multi-step automation end-to-end without user hand-holding | **Must Have** |
-| 4 | **Communication (Email + WhatsApp)** | Draft, send, and attach files via voice or text command | **Must Have** |
-| 5 | **Calendar & Scheduling** | Check availability, book meetings, suggest time slots | **Must Have** |
-| 6 | **Meeting Copilot** | Transcribe, summarize, and extract action items from meetings | **Should Have** |
-| 7 | **Task & Reminder Management** | Set, track, and surface reminders and to-dos | **Must Have** |
-| 8 | **Decision Making** | Understand intent and select the right action or flow | **Must Have** |
-| 9 | **Smart Suggestions** | Proactively recommend actions, follow-ups, or responses | **Should Have** |
-| 10 | **Memory & Personalization** | Learn user behavior, retain preferences across sessions | **Should Have** |
-| 11 | **Wake-Up Briefing** | Daily summary of tasks, schedule, and project updates | **Must Have** |
+The following table lists all 11 capabilities from GOAL.md, with priority classification for v1.0.
+
+| # | Feature | Priority | Notes |
+|---|---------|----------|-------|
+| F1 | Conversational Voice & Text Assistance | Must Have | Primary interaction layer; required in free mode |
+| F2 | Intelligent File Search + Action | Must Have | Core value proposition; semantic search required |
+| F3 | Autonomous Task Execution | Must Have | Multi-step automation is foundational |
+| F4 | Communication (Email + WhatsApp) | Must Have | Direct user value; high usage frequency |
+| F5 | Calendar & Scheduling | Must Have | Core productivity feature |
+| F6 | Meeting Copilot | Should Have | High value but dependent on audio integration |
+| F7 | Task & Reminder Management | Must Have | Required for daily utility |
+| F8 | Decision Making & Intent Understanding | Must Have | Underlies all other features |
+| F9 | Smart Suggestions & Recommendations | Should Have | Enhances experience; not blocking |
+| F10 | Memory & Personalization | Should Have | Required for long-term engagement; partial in v1.0 |
+| F11 | Wake-Up Briefing | Should Have | High engagement value; depends on F5, F7, F10 |
 
 ### 5.2 Priority Definitions
 
-- **Must Have:** Core to v1.0. Alex is not shippable without these.
-- **Should Have:** High value, included in v1.0 if feasible within timeline.
-- **Nice to Have:** Deferred to v1.1+ unless development velocity allows earlier inclusion.
+- **Must Have:** Required for v1.0 launch. Alex cannot be considered functional without these.
+- **Should Have:** Planned for v1.0 but may be delivered in a later sub-version if constraints require deferral.
+- **Nice to Have:** Valuable but not blocking. Targeted for v1.1 or later.
 
 ---
 
 ## 6.0 User Stories
 
-### 6.1 Feature 1 — Conversational Voice & Text Assistance
+### 6.1 F1 — Conversational Voice & Text Assistance
 
-| ID | User Story | Acceptance Criteria |
-|----|------------|---------------------|
-| US-1.1 | As a user, I want to speak to Alex naturally so that I don't have to type commands or remember syntax | Alex correctly interprets free-form voice input ≥ 95% of the time |
-| US-1.2 | As a user, I want Alex to remember what I said earlier in the conversation so that I don't have to repeat context | Alex retains and references context from the last 10+ turns |
-| US-1.3 | As a user, I want to switch between voice and text mid-conversation so that I can use Alex in any environment | Both modalities work seamlessly in a single session |
-| US-1.4 | As a user, I want Alex to confirm multi-step actions before executing so that I don't trigger unintended actions | Alex asks for confirmation on irreversible or high-impact actions |
+**US-1.1:** As a consultant, I want to speak a command naturally and have Alex understand my intent, so that I do not need to learn specific syntax or keywords.
 
-### 6.2 Feature 2 — Intelligent File Search + Action
+**US-1.2:** As a remote worker, I want to switch between voice and text input without losing context, so that I can use Alex in both quiet and noisy environments.
 
-| ID | User Story | Acceptance Criteria |
-|----|------------|---------------------|
-| US-2.1 | As a user, I want to say "find the proposal I sent last month" so that Alex locates the file without me searching manually | Correct file retrieved in ≤ 3 seconds |
-| US-2.2 | As a user, I want to search files by meaning, not just exact name so that I can find things even when I forget the file name | Semantic search returns relevant results even with vague queries |
-| US-2.3 | As a user, I want Alex to send a found file to a contact via WhatsApp so that I can share documents hands-free | File attached and sent to correct contact in one command |
-| US-2.4 | As a user, I want file search to be case-insensitive so that I don't have to remember exact capitalization | Queries like "Q3 report" and "q3 report" return identical results |
+**US-1.3:** As a startup founder, I want Alex to maintain context across a multi-turn conversation, so that I do not need to repeat background information with each follow-up question.
 
-### 6.3 Feature 3 — Autonomous Task Execution
+**US-1.4:** As a user, I want Alex to detect a wake word and begin listening, so that I can activate it hands-free during busy moments.
 
-| ID | User Story | Acceptance Criteria |
-|----|------------|---------------------|
-| US-3.1 | As a user, I want to say "schedule a meeting with Priya next Tuesday and send her the agenda doc" so that Alex handles the entire flow | Meeting booked, invite sent, file attached — all without additional input |
-| US-3.2 | As a user, I want Alex to execute multi-step tasks in the correct sequence so that no step is skipped or done out of order | Task dependency graph followed correctly; errors surfaced immediately |
-| US-3.3 | As a user, I want Alex to notify me when a long task is complete so that I don't have to check manually | Push/voice notification sent on completion or failure |
-| US-3.4 | As a user, I want Alex to handle errors gracefully so that a failure in one step doesn't silently kill the whole task | Clear error message with option to retry or modify |
+---
 
-### 6.4 Feature 4 — Communication (Email + WhatsApp)
+### 6.2 F2 — Intelligent File Search + Action
 
-| ID | User Story | Acceptance Criteria |
-|----|------------|---------------------|
-| US-4.1 | As a user, I want to say "email Arjun the Q3 report and tell him it's ready for review" so that Alex drafts and sends it | Email sent with correct attachment and appropriate tone |
-| US-4.2 | As a user, I want Alex to resolve contact names intelligently so that "Priya" maps to the right person even if I have multiple Priyas | Alex disambiguates using context (last interaction, role, recency) |
-| US-4.3 | As a user, I want to review a draft before Alex sends it so that I can catch errors | Draft preview shown by default for first-time contacts; configurable |
-| US-4.4 | As a user, I want Alex to match my tone (formal/casual) when drafting so that messages feel authentic | Tone preference stored in memory; applied per contact or context |
+**US-2.1:** As a consultant, I want to say "Send Priya the Q1 proposal" and have Alex find the correct file and deliver it via WhatsApp, so that I can complete the task without navigating to the file manually.
 
-### 6.5 Feature 5 — Calendar & Scheduling
+**US-2.2:** As a knowledge worker, I want file search to be case-insensitive and semantically aware, so that I can find files even when I do not remember the exact filename.
 
-| ID | User Story | Acceptance Criteria |
-|----|------------|---------------------|
-| US-5.1 | As a user, I want to ask "when am I free tomorrow afternoon?" so that I get an instant, accurate answer | Free slots returned from connected calendar in ≤ 2 seconds |
-| US-5.2 | As a user, I want Alex to book a meeting and send invites so that I don't have to open my calendar app | Event created, invites sent, confirmation received |
-| US-5.3 | As a user, I want Alex to suggest the best time for a meeting based on all attendees' availability so that scheduling friction is removed | Optimal slot suggested; cross-calendar availability checked |
-| US-5.4 | As a user, I want to reschedule a meeting by voice so that I can update my calendar without opening any app | Event updated, attendees notified automatically |
+**US-2.3:** As a user, I want Alex to confirm before sending a file if it is ambiguous which file I meant, so that I do not accidentally send the wrong document.
 
-### 6.6 Feature 6 — Meeting Copilot
+**US-2.4:** As a startup founder, I want Alex to index new files automatically as they are added, so that search results remain current without manual updates.
 
-| ID | User Story | Acceptance Criteria |
-|----|------------|---------------------|
-| US-6.1 | As a user, I want Alex to transcribe my meetings in real time so that I have a full record without manual notes | ≥ 90% transcription accuracy for clear audio |
-| US-6.2 | As a user, I want a meeting summary delivered after every call so that I can move on without spending time writing notes | Summary generated within 2 minutes of meeting end |
-| US-6.3 | As a user, I want action items automatically extracted and added to my task list so that nothing slips through | All explicitly stated actions captured; ambiguous ones flagged |
-| US-6.4 | As a user, I want the meeting summary shared with participants automatically so that everyone has the same notes | Summary emailed/sent to all attendees post-meeting |
+---
 
-### 6.7 Feature 7 — Task & Reminder Management
+### 6.3 F3 — Autonomous Task Execution
 
-| ID | User Story | Acceptance Criteria |
-|----|------------|---------------------|
-| US-7.1 | As a user, I want to say "remind me to follow up with Arjun on Friday at 9 AM" so that the reminder is set instantly | Reminder created with correct contact, time, and context |
-| US-7.2 | As a user, I want to see all my pending tasks in one place so that I have a clear picture of what needs to be done | Task list accessible via voice query and text interface |
-| US-7.3 | As a user, I want Alex to surface overdue tasks proactively so that nothing is forgotten | Overdue tasks surfaced in morning briefing and on demand |
-| US-7.4 | As a user, I want to mark tasks complete by voice so that task management stays hands-free | "Mark done" command updates task status immediately |
+**US-3.1:** As a consultant, I want to give Alex a multi-step instruction such as "Find the contract, summarize it, and email it to the client" and have it execute all steps in sequence, so that I can delegate complex workflows with a single command.
 
-### 6.8 Feature 8 — Decision Making
+**US-3.2:** As a user, I want Alex to ask for confirmation before irreversible actions such as sending an email or deleting a file, so that I maintain control over consequential steps.
 
-| ID | User Story | Acceptance Criteria |
-|----|------------|---------------------|
-| US-8.1 | As a user, I want Alex to understand ambiguous commands and pick the most likely intent so that I don't need to be overly precise | Correct intent inferred ≥ 88% of the time based on context |
-| US-8.2 | As a user, I want Alex to ask a single clarifying question when uncertain so that I'm not interrogated but also not misunderstood | Only one clarification question per ambiguous intent |
-| US-8.3 | As a user, I want Alex to choose the correct action (email vs. WhatsApp) based on my past behaviour so that it defaults intelligently | Channel preference learned per contact within 2 weeks of usage |
+**US-3.3:** As a startup founder, I want Alex to handle errors gracefully and report what succeeded and what failed, so that I can act on incomplete workflows without confusion.
 
-### 6.9 Feature 9 — Smart Suggestions
+**US-3.4:** As a user, I want to review a task plan before Alex executes it, so that I can correct misunderstandings before they result in real actions.
 
-| ID | User Story | Acceptance Criteria |
-|----|------------|---------------------|
-| US-9.1 | As a user, I want Alex to suggest a follow-up email after a meeting so that I act while the context is fresh | Follow-up suggestion offered within 30 minutes of meeting end |
-| US-9.2 | As a user, I want Alex to recommend rescheduling when my calendar is overloaded so that I manage my time better | Conflict or overload detected and surfaced proactively |
-| US-9.3 | As a user, I want Alex to surface relevant files when I'm about to enter a meeting so that I'm always prepared | Related files suggested 5–10 minutes before a meeting starts |
+---
 
-### 6.10 Feature 10 — Memory & Personalization
+### 6.4 F4 — Communication (Email + WhatsApp)
 
-| ID | User Story | Acceptance Criteria |
-|----|------------|---------------------|
-| US-10.1 | As a user, I want Alex to remember my preferences (tone, preferred apps, working hours) across sessions so that I never reconfigure it | Preferences persist indefinitely until explicitly changed |
-| US-10.2 | As a user, I want Alex to learn which contacts I communicate with most so that it prioritizes them | Contact interaction frequency tracked and used in suggestions |
-| US-10.3 | As a user, I want to be able to correct Alex's assumptions so that the memory stays accurate | User correction immediately updates preference; confirmation shown |
+**US-4.1:** As a consultant, I want to say "Email Rohan the meeting summary" and have Alex compose and send a professional email, so that I can dispatch communications without opening my email client.
 
-### 6.11 Feature 11 — Wake-Up Briefing
+**US-4.2:** As a startup founder, I want Alex to resolve contact names intelligently — including partial names and nicknames — so that I do not need to specify full names or email addresses every time.
 
-| ID | User Story | Acceptance Criteria |
-|----|------------|---------------------|
-| US-11.1 | As a user, I want Alex to brief me each morning on my tasks, meetings, and priorities so that I start the day with full context | Briefing ready by configurable time (default: 7:00 AM) |
-| US-11.2 | As a user, I want the briefing to include any important messages I missed overnight so that nothing urgent is overlooked | Unread high-priority emails and messages surfaced |
-| US-11.3 | As a user, I want the briefing delivered by voice so that I can listen while getting ready | Text-to-speech briefing playable on demand or auto-play |
-| US-11.4 | As a user, I want to ask follow-up questions during the briefing so that I can act immediately on anything urgent | Briefing transitions into conversational mode on any voice input |
+**US-4.3:** As a user, I want Alex to adjust the tone of a message (formal vs. casual) based on my instruction, so that communications are contextually appropriate.
+
+**US-4.4:** As a remote worker, I want Alex to attach the correct file to an email automatically when I reference it by description, so that I do not need to locate and attach it manually.
+
+---
+
+### 6.5 F5 — Calendar & Scheduling
+
+**US-5.1:** As a startup founder, I want to say "Book a one-hour meeting with Priya next Tuesday afternoon" and have Alex find an available slot and create the calendar event, so that scheduling requires no manual calendar interaction.
+
+**US-5.2:** As a consultant, I want Alex to check my availability before confirming any meeting, so that double-bookings are prevented automatically.
+
+**US-5.3:** As a remote worker, I want Alex to suggest two or three available time slots when coordinating with multiple participants, so that scheduling negotiations are faster.
+
+**US-5.4:** As a user, I want Alex to send calendar invitations to all participants automatically after booking a meeting, so that no follow-up coordination is required.
+
+---
+
+### 6.6 F6 — Meeting Copilot
+
+**US-6.1:** As a remote worker, I want Alex to transcribe my meetings in real time, so that I have a searchable record of every discussion.
+
+**US-6.2:** As a startup founder, I want Alex to generate a structured meeting summary with key decisions and action items, so that I can share outcomes with my team immediately after the meeting ends.
+
+**US-6.3:** As a consultant, I want Alex to identify which action items are assigned to me versus others, so that I can prioritize my own follow-ups clearly.
+
+**US-6.4:** As a user, I want Alex to automatically add extracted action items as tasks or reminders, so that nothing from a meeting is forgotten.
+
+---
+
+### 6.7 F7 — Task & Reminder Management
+
+**US-7.1:** As a consultant, I want to say "Remind me to follow up with Arjun tomorrow at 10 AM" and have Alex set the reminder without any additional steps, so that task capture is frictionless.
+
+**US-7.2:** As a remote worker, I want Alex to maintain a running task list that I can query at any time, so that I always know what is pending.
+
+**US-7.3:** As a startup founder, I want Alex to escalate overdue reminders proactively rather than silently expiring them, so that nothing slips through.
+
+---
+
+### 6.8 F8 — Decision Making & Intent Understanding
+
+**US-8.1:** As a user, I want Alex to correctly interpret multi-intent commands such as "Search for the contract, summarize it, and send it," so that I can issue compound instructions naturally.
+
+**US-8.2:** As a consultant, I want Alex to ask a single clarifying question when my instruction is ambiguous, rather than refusing to act, so that the workflow continues with minimal friction.
+
+**US-8.3:** As a user, I want Alex to select the correct action from a set of available capabilities based on my intent, so that I do not need to specify which tool to use.
+
+---
+
+### 6.9 F9 — Smart Suggestions & Recommendations
+
+**US-9.1:** As a consultant, I want Alex to proactively suggest sending a follow-up email after a meeting if no follow-up has been sent within 24 hours, so that I do not miss client touchpoints.
+
+**US-9.2:** As a startup founder, I want Alex to recommend the most relevant files or contacts when I begin composing a communication, so that I spend less time searching.
+
+**US-9.3:** As a user, I want Alex to surface intelligent insights — such as a pending task that aligns with an upcoming meeting — so that I can act on connections I might otherwise miss.
+
+---
+
+### 6.10 F10 — Memory & Personalization
+
+**US-10.1:** As a returning user, I want Alex to remember my preferred communication style and apply it automatically, so that I do not need to re-specify preferences every session.
+
+**US-10.2:** As a consultant, I want Alex to learn which contacts I communicate with most frequently and prioritize them in suggestions, so that resolution is faster over time.
+
+**US-10.3:** As a user, I want to be able to review and correct what Alex has learned about me, so that I maintain transparency and control over my personalization data.
+
+---
+
+### 6.11 F11 — Wake-Up Briefing
+
+**US-11.1:** As a consultant, I want Alex to deliver a concise morning briefing covering my schedule, pending tasks, and any unread priority emails, so that I can start my day fully oriented.
+
+**US-11.2:** As a startup founder, I want the briefing to include project status updates and any flagged items from the previous day, so that I stay on top of ongoing work without manual review.
+
+**US-11.3:** As a remote worker, I want to receive the briefing via voice on request, so that I can consume it hands-free while preparing for the day.
 
 ---
 
@@ -271,105 +345,84 @@ Modern professionals and individuals manage an overwhelming number of tools, pla
 
 ### 7.1 Technical Constraints
 
-| # | Constraint | Impact |
-|---|-----------|--------|
-| TC-1 | Voice recognition quality depends on microphone hardware and ambient noise | Accuracy may degrade in noisy environments |
-| TC-2 | WhatsApp API access requires Meta Business API approval and compliance | Must use official API; unofficial APIs are prohibited |
-| TC-3 | Google Calendar and Gmail integrations require OAuth 2.0 and Google API quotas | Rate limits may affect high-frequency users |
-| TC-4 | File search is limited to connected/indexed storage (Google Drive, Dropbox, local) | Files in non-integrated platforms won't be searchable |
-| TC-5 | Real-time meeting transcription requires audio stream access and compute | Transcription latency must be managed for long meetings |
-| TC-6 | LLM inference latency must stay under 2 seconds for voice-first experience | Streaming responses required; batch processing not acceptable |
-| TC-7 | Mobile-first architecture required for on-the-go usage | Web and desktop are secondary in v1.0 |
+| Constraint | Detail |
+|-----------|--------|
+| Free mode must be fully functional | No core feature may depend on a paid API as its only implementation path |
+| Paid APIs are optional upgrades only | OpenAI, Anthropic Claude, and similar services may only be activated by user choice |
+| Mode switching must be non-disruptive | Switching between free and paid modes must not interrupt active tasks or corrupt stored data |
+| Voice processing must support offline capability | At minimum, wake word detection must function without an internet connection |
+| File system access is local by default | Alex must not require cloud file storage as a prerequisite for file search |
+| Multi-platform communication | Email and WhatsApp integrations must work across the platforms users already use |
 
 ### 7.2 Budget Constraints
 
-| # | Constraint |
-|---|-----------|
-| BC-1 | LLM API costs must be managed — use prompt caching and efficient context windowing |
-| BC-2 | v1.0 is a single-user product; no multi-tenancy infrastructure cost in initial build |
-| BC-3 | Third-party API costs (WhatsApp, Google, Transcription) must be scoped and capped |
+- Alex's core system must have zero recurring API cost in free mode.
+- Paid API costs, when the upgrade mode is activated, are borne by the user and must be clearly disclosed before activation.
+- Development tooling and hosting in v1.0 should prioritize open-source and self-hostable solutions.
 
 ### 7.3 Time Constraints
 
-| # | Constraint |
-|---|-----------|
-| TM-1 | v1.0 must be functional (all Must Have features) within defined sprint schedule |
-| TM-2 | Documentation phase must complete before any engineering begins |
-| TM-3 | Should Have features may be descoped if timeline risk arises |
+- Documentation phase (all 7 documents): to be completed before development begins.
+- v1.0 feature scope is fixed by this PRD. New feature requests will be deferred to v1.1.
 
-### 7.4 Key Assumptions
+### 7.4 Assumptions
 
-| # | Assumption |
-|---|-----------|
-| A-1 | The user has a stable internet connection for cloud-based LLM calls |
-| A-2 | The user has active accounts on Gmail, WhatsApp, and Google Calendar |
-| A-3 | File storage is primarily Google Drive or a locally accessible file system |
-| A-4 | Alex is initially a single-user system (one person, one instance) |
-| A-5 | The user is comfortable granting OAuth permissions to Alex for connected services |
-| A-6 | English is the primary interaction language for v1.0 |
-| A-7 | Wake word detection ("Hey Alex") is available on the device platform being used |
+- Users have a working device (desktop or mobile) capable of running a local AI model.
+- WhatsApp integration is possible through available APIs or automation bridges (e.g., WhatsApp Business API or third-party wrappers).
+- Users consent to local storage of memory and preference data.
+- Internet connectivity is available for communication features (email, WhatsApp), though voice and file search may function offline.
+- The primary language for v1.0 is English, with multilingual support deferred to a later version.
 
 ---
 
 ## 8.0 Out of Scope
 
-The following capabilities are explicitly **not included in v1.0** and are deferred to future versions:
+The following capabilities are explicitly excluded from Alex v1.0:
 
-| # | Out of Scope Item | Reason |
-|---|------------------|--------|
-| OS-1 | **Multi-user / team support** | v1.0 is a single-user personal assistant |
-| OS-2 | **Vision / image understanding** | Listed as advanced future capability in GOAL.md |
-| OS-3 | **Multi-agent system** | Requires significantly more infrastructure; v2.0+ |
-| OS-4 | **Non-English language support** | Deferred post-launch; localization effort required |
-| OS-5 | **CRM or sales pipeline integration** | Out of personal OS scope for v1.0 |
-| OS-6 | **Custom wake word training** | Default wake word used in v1.0; custom training deferred |
-| OS-7 | **Emotion detection in voice** | Listed as advanced; requires specialized ML pipeline |
-| OS-8 | **Autonomous financial transactions** | Security and compliance requirements too complex for v1.0 |
-| OS-9 | **Slack / Teams / Zoom native integration** | May be included if bandwidth allows; officially out of scope |
-| OS-10 | **Offline-only mode** | Alex requires internet connectivity for LLM and integrations in v1.0 |
+| Item | Reason for Exclusion |
+|------|----------------------|
+| Multilingual voice support | Adds significant NLP complexity; deferred to v1.1 |
+| Native mobile application | v1.0 targets desktop/web; mobile is a separate platform effort |
+| Autonomous financial transactions | Risk and compliance considerations; requires separate security review |
+| Vision / image understanding | Advanced capability; deferred pending infrastructure readiness |
+| Multi-agent orchestration | Complex coordination layer; planned for a future version |
+| Team or multi-user accounts | v1.0 is a single-user system; collaboration features deferred |
+| CRM or third-party SaaS integrations | Specific integrations (e.g., Salesforce, Notion) deferred to v1.1 |
+| Cloud file storage management | Alex operates on local file systems only in v1.0 |
+| Emotion-aware voice response | Emotion detection is a future enhancement |
+| Automated upselling of paid APIs to the user | Alex must never push paid mode without explicit user initiation |
 
 ---
 
 ## 9.0 Open Questions
 
-| # | Question | Owner | Priority |
-|---|----------|-------|----------|
-| OQ-1 | What is the primary deployment platform for v1.0 — mobile app, web app, or desktop? | Product | High |
-| OQ-2 | Which file storage platforms must be supported at launch — Google Drive only, or also Dropbox / OneDrive? | Product | High |
-| OQ-3 | Will WhatsApp integration use Meta's official Business API or a third-party wrapper? | Engineering | High |
-| OQ-4 | What is the memory persistence strategy — local storage, cloud DB, or hybrid? | Engineering | High |
-| OQ-5 | What LLM provider will power Alex — Anthropic Claude, OpenAI, or a hybrid? | Engineering | High |
-| OQ-6 | Will meeting transcription be handled in real-time (streaming) or post-meeting (batch)? | Engineering | Medium |
-| OQ-7 | What is the data retention policy for memory, transcriptions, and user history? | Product / Legal | Medium |
-| OQ-8 | Should the morning briefing be pushed automatically or require user trigger? | Product | Medium |
-| OQ-9 | How will Alex handle contacts — dedicated contact book or pulled from email/WhatsApp? | Engineering | Medium |
-| OQ-10 | Is there a need for an admin/settings UI in v1.0, or is everything configured by voice? | Product | Low |
+| # | Question | Owner | Target Resolution Date |
+|---|----------|-------|------------------------|
+| OQ-1 | Which local AI model(s) will serve as the default engine in free mode? (e.g., LLaMA, Mistral, Phi) | Tech Lead | Before System Design Document |
+| OQ-2 | What is the WhatsApp integration mechanism? (Business API, Twilio, unofficial bridge?) | Engineering | Before Tech Stack Document |
+| OQ-3 | How will meeting transcription be handled without a paid service? (e.g., Whisper local) | Engineering | Before Feature List Document |
+| OQ-4 | What is the memory storage format? (local SQLite, flat JSON, vector store?) | Architecture | Before System Design Document |
+| OQ-5 | How will wake word detection be implemented without cloud dependency? | Engineering | Before System Design Document |
+| OQ-6 | What is the exact scope of calendar integration? (Google Calendar only, or multi-provider?) | Product | Before User Flow Document |
+| OQ-7 | What security model governs access to stored memory and communication credentials? | Security Lead | Before Security Document |
+| OQ-8 | Is the v1.0 delivery target desktop-only, or also web-based? | Product | Before System Design Document |
 
 ---
 
 ## 10.0 Next Steps
 
-| # | Action | Owner | Due |
-|---|--------|-------|-----|
-| NS-1 | Resolve all High priority Open Questions (OQ-1 through OQ-5) before System Design begins | Product + Engineering | Before Document 2 |
-| NS-2 | Review and sign off on PRD v1.0 | Stakeholders | Before Document 2 |
-| NS-3 | Begin **System Design Document** — architecture, integrations, data flows | Engineering Lead | After PRD sign-off |
-| NS-4 | Map PRD user stories to system components in System Design Document | Engineering | During Doc 2 |
-| NS-5 | Validate feature priorities with real user feedback (Arjun, Priya, Rahul personas) | Product | Parallel to Doc 2 |
-| NS-6 | Confirm API access and credentials for Gmail, Google Calendar, WhatsApp | Engineering | Before Doc 5 (Tech Stack) |
+Upon approval of this PRD, the following actions are to be taken in sequence:
+
+1. **Resolve Open Questions OQ-1 through OQ-8** before proceeding with any technical document.
+2. **Author the System Design Document (v1.0)**, covering architecture, data flows, component design, and the hybrid AI model implementation. This document must reference this PRD as its requirement source.
+3. **Author the User Flow Document (v1.0)**, mapping all major user journeys from intent to action completion.
+4. **Author the Feature List Document (v1.0)**, enumerating every feature with acceptance criteria, dependencies, and delivery estimates.
+5. **Author the Tech Stack Requirements Document (v1.0)**, specifying all tools, frameworks, models, and services required — with clear free-mode vs. paid-mode designation.
+6. **Author the Security Document (v1.0)**, covering data handling, authentication, access control, and action permission models.
+7. **Author the AI Instructions Document (v1.0)**, defining how Alex's AI layer is prompted, configured, and constrained to produce consistent and safe behavior.
+
+All seven documents must remain internally consistent with this PRD and with each other. Any change to a decision made in this document must be recorded as a version update and communicated to all document owners.
 
 ---
 
-*This document is v1.0 and will be updated as decisions from subsequent documentation phases are finalized. All changes must be versioned and tracked.*
-
----
-**Document Control**
-
-| Field | Value |
-|-------|-------|
-| Document Name | PRD.md |
-| Version | v1.0 |
-| Status | Draft |
-| Created | 24 March 2026 |
-| Last Updated | 24 March 2026 |
-| Source of Truth | GOAL.md |
+*Document maintained by the Alex Build Team. Version history to be tracked in a separate changelog.*
