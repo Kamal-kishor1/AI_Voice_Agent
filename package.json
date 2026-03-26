@@ -1,0 +1,16 @@
+{
+  "name": "antigravity",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "packages/*"
+  ],
+  "scripts": {
+    "build:web": "npm --workspace apps/web run build",
+    "dev:web": "npm --workspace apps/web run dev",
+    "lint:web": "npm --workspace apps/web run lint"
+  },
+  "devDependencies": {
+    "turbo": "^2.1.3"
+  }
+}

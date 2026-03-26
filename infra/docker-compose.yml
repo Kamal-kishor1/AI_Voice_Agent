@@ -1,0 +1,86 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: alex
+      POSTGRES_USER: alex
+      POSTGRES_PASSWORD: alex
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alex -d alex"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5433:5432"  # Host 5433 → Container 5432 (avoids local PG conflict)
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "6380:6379"  # Host 6380 → Container 6379 (avoids local Redis conflict)
+    volumes:
+      - redis_data:/data
+
+  api:
+    build:
+      context: ../apps/api
+    command: >
+      sh -c "alembic upgrade head &&
+      uvicorn main:app --host 0.0.0.0 --port 8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      APP_ENV: development
+      APP_NAME: Alex API
+      APP_VERSION: 0.1.0
+      DATABASE_URL: postgresql+asyncpg://alex:alex@db:5432/alex
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8000:8000"
+
+  worker:
+    build:
+      context: ../apps/api
+    command: celery -A app.worker.celery_app.celery_app worker --loglevel=info
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      APP_ENV: development
+      APP_NAME: Alex API
+      APP_VERSION: 0.1.0
+      DATABASE_URL: postgresql+asyncpg://alex:alex@db:5432/alex
+      REDIS_URL: redis://redis:6379/0
+
+  beat:
+    build:
+      context: ../apps/api
+    command: celery -A app.worker.celery_app.celery_app beat --loglevel=info
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      APP_ENV: development
+      APP_NAME: Alex API
+      APP_VERSION: 0.1.0
+      DATABASE_URL: postgresql+asyncpg://alex:alex@db:5432/alex
+      REDIS_URL: redis://redis:6379/0
+
+volumes:
+  postgres_data:
+  redis_data:
