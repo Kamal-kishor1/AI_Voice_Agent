@@ -54,6 +54,17 @@ class Settings(BaseSettings):
         ),
         alias="GOOGLE_OAUTH_SCOPES",
     )
+    ai_mode: str = Field(default="free", alias="AI_MODE")
+    ollama_base_url: str = Field(
+        default="http://localhost:11434",
+        alias="OLLAMA_BASE_URL",
+    )
+    notification_retention_seconds: int = Field(
+        default=604800,
+        alias="NOTIFICATION_RETENTION_SECONDS",
+    )
+    anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
+    openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
 
     @property
     def parsed_cors_origins(self) -> list[str]:

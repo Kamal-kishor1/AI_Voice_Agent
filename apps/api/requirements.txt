@@ -3,6 +3,7 @@ asyncpg==0.30.0
 bcrypt==4.2.1
 celery==5.4.0
 cryptography==44.0.1
+dateparser==1.2.0
 email-validator==2.2.0
 fastapi==0.111.1
 httpx==0.28.1

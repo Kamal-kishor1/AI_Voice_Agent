@@ -54,3 +54,34 @@ def error_response(
             }
         ),
     )
+
+
+def paginated_response(
+    request: Request,
+    data: Any,
+    *,
+    page: int,
+    per_page: int,
+    total_items: int,
+    status_code: int = status.HTTP_200_OK,
+) -> JSONResponse:
+    total_pages = (total_items + per_page - 1) // per_page if total_items else 0
+    return JSONResponse(
+        status_code=status_code,
+        content=jsonable_encoder(
+            {
+                "success": True,
+                "data": data,
+                "pagination": {
+                    "page": page,
+                    "per_page": per_page,
+                    "total_items": total_items,
+                    "total_pages": total_pages,
+                },
+                "meta": {
+                    "request_id": getattr(request.state, "request_id", "unknown"),
+                    "timestamp": _timestamp(),
+                },
+            }
+        ),
+    )

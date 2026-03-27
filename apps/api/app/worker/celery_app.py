@@ -9,7 +9,11 @@ celery_app = Celery(
     "alex",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.worker.jobs"],
+    include=[
+        "app.worker.jobs",
+        "app.worker.reminder_jobs",
+        "app.worker.overdue_scan_jobs",
+    ],
 )
 
 celery_app.conf.update(
@@ -19,4 +23,14 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    beat_schedule={
+        "scan-due-reminders": {
+            "task": "reminders.scan_due",
+            "schedule": 30.0,
+        },
+        "scan-overdue-tasks": {
+            "task": "tasks.scan_overdue",
+            "schedule": 3600.0,
+        },
+    },
 )
